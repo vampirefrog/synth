@@ -59,37 +59,19 @@ void usage () {
 );
 }
 
-void
-process_silence (jack_nframes_t nframes)
-{
+void process_silence (jack_nframes_t nframes) {
 	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port, nframes);
 	memset (buffer, 0, sizeof (jack_default_audio_sample_t) * nframes);
 }
 
-void
-process_audio (jack_nframes_t nframes)
-{
-
+void process_audio (jack_nframes_t nframes) {
 	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port, nframes);
 	for(int i = 0; i < nframes; i++) {
 		buffer[i] = synth_render_sample(&synth) / 32767.0;
 	}
-	// jack_nframes_t frames_left = nframes;
-
-	// while (wave_length - offset < frames_left) {
-	// 	memcpy (buffer + (nframes - frames_left), wave + offset, sizeof (sample_t) * (wave_length - offset));
-	// 	frames_left -= wave_length - offset;
-	// 	offset = 0;
-	// }
-	// if (frames_left > 0) {
-	// 	memcpy (buffer + (nframes - frames_left), wave + offset, sizeof (sample_t) * frames_left);
-	// 	offset += frames_left;
-	// }
 }
 
-int
-process (jack_nframes_t nframes, void *arg)
-{
+int process (jack_nframes_t nframes, void *arg) {
 	if (transport_aware) {
 		jack_position_t pos;
 
@@ -149,6 +131,8 @@ snd_seq_t *open_seq() {
 		fprintf(stderr, "Error creating sequencer port.\n");
 		exit(1);
 	}
+
+	snd_seq_connect_from(seq_handle, portid, 32, 0);
 	return(seq_handle);
 }
 
@@ -159,14 +143,23 @@ void midi_action(snd_seq_t *seq_handle) {
 	do {
 		snd_seq_event_input(seq_handle, &ev);
 		switch (ev->type) {
-		case SND_SEQ_EVENT_NOTEON:
-			printf("Note on %d (%s) %d\n", ev->data.note.note, midi_note_name(ev->data.note.note), ev->data.note.velocity);
-			synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
-			break;
-		case SND_SEQ_EVENT_NOTEOFF:
-			printf("Note off %d\n", ev->data.note.note);
-			synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
-			break;
+			case SND_SEQ_EVENT_NOTEON:
+				printf("Note on %d (%s) %d\n", ev->data.note.note, midi_note_name(ev->data.note.note), ev->data.note.velocity);
+				synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
+				break;
+			case SND_SEQ_EVENT_NOTEOFF:
+				printf("Note off %d\n", ev->data.note.note);
+				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
+				break;
+			case SND_SEQ_EVENT_CONTROLLER:
+				printf("CC %d %d\n", ev->data.control.param, ev->data.control.value);
+				if(ev->data.control.param == 93) {
+					synth_set_pulse_width(&synth, ev->data.control.value);
+				}
+				if(ev->data.control.param == 74) {
+					synth_set_unison_spread(&synth, ev->data.control.value);
+				}
+				break;
 		}
 		snd_seq_free_event(ev);
 	} while (snd_seq_event_input_pending(seq_handle, 0) > 0);
@@ -176,14 +169,10 @@ void midi_action(snd_seq_t *seq_handle) {
 int main(int argc, char **argv) {
 	sample_t scale;
 	int i, attack_length, decay_length;
-	double *amp;
-	double max_amp = 0.5;
 	int option_index;
 	int opt;
-	int got_bpm = 0;
-	int attack_percent = 1, decay_percent = 10, dur_arg = 100;
 	char *client_name = 0;
-	char *bpm_string = "bpm";
+	char *bpm_string = "synth out";
 	int verbose = 0;
 	jack_status_t status;
 
@@ -219,25 +208,38 @@ int main(int argc, char **argv) {
 
 	/* Initial Jack setup, get sample rate */
 	if (!client_name) {
-		client_name = (char *) malloc (9 * sizeof (char));
-		strcpy (client_name, "metro");
+		client_name = strdup("vampi va");
 	}
 	if ((client = jack_client_open (client_name, JackNoStartServer, &status)) == 0) {
 		fprintf (stderr, "jack server not running?\n");
 		return 1;
 	}
-	jack_set_process_callback (client, process, 0);
-	output_port = jack_port_register (client, bpm_string, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	jack_set_process_callback(client, process, 0);
+	output_port = jack_port_register(client, bpm_string, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
-	sr = jack_get_sample_rate (client);
+	sr = jack_get_sample_rate(client);
+
+	if (jack_activate (client)) {
+		fprintf (stderr, "cannot activate client");
+		exit (1);
+	}
+
+	const char **ports;
+	ports = jack_get_ports (client, NULL, NULL, JackPortIsPhysical|JackPortIsInput);
+	if (ports == NULL) {
+		fprintf(stderr, "no physical capture ports\n");
+		exit (1);
+	}
+
+	if (jack_connect (client, jack_port_name (output_port), ports[0])) {
+		fprintf (stderr, "cannot connect input ports\n");
+	}
 
 	synth_init(&synth);
-	synth.attack = 50;
-	synth.decay = 200;
-	synth.sustain = 60;
-	synth.release = 100;
-
-	/* setup wave table parameters */
+	synth.attack = 200;
+	synth.decay = 100;
+	synth.sustain = 80;
+	synth.release = 50;
 
 	if (jack_activate (client)) {
 		fprintf (stderr, "cannot activate client");
@@ -253,7 +255,6 @@ int main(int argc, char **argv) {
 	pfd = (struct pollfd *)alloca(npfd * sizeof(struct pollfd));
 	snd_seq_poll_descriptors(seq_handle, pfd, npfd, POLLIN);
 	while (1) {
-		printf("poll\n");
 		if (poll(pfd, npfd, 100000) > 0) {
 			midi_action(seq_handle);
 		}
