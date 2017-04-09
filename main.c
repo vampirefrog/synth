@@ -47,7 +47,7 @@ jack_transport_state_t transport_state;
 
 void usage () {
 	fprintf (stderr, "\n"
-"usage: jack_metro \n"
+"usage: vampisynth \n"
 "              [ --frequency OR -f frequency (in Hz) ]\n"
 "              [ --amplitude OR -A maximum amplitude (between 0 and 1) ]\n"
 "              [ --duration OR -D duration (in ms) ]\n"
@@ -132,7 +132,7 @@ snd_seq_t *open_seq() {
 		exit(1);
 	}
 
-	snd_seq_connect_from(seq_handle, portid, 32, 0);
+	snd_seq_connect_from(seq_handle, portid, 36, 0);
 	return(seq_handle);
 }
 
@@ -148,7 +148,7 @@ void midi_action(snd_seq_t *seq_handle) {
 				synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_NOTEOFF:
-				printf("Note off %d\n", ev->data.note.note);
+				// printf("Note off %d\n", ev->data.note.note);
 				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_CONTROLLER:
@@ -158,6 +158,12 @@ void midi_action(snd_seq_t *seq_handle) {
 				}
 				if(ev->data.control.param == 74) {
 					synth_set_unison_spread(&synth, ev->data.control.value);
+				}
+				if(ev->data.control.param == 71) {
+					synth_set_cutoff_freq(&synth, ev->data.control.value);
+				}
+				if(ev->data.control.param == 73) {
+					synth_set_resonance(&synth, ev->data.control.value);
 				}
 				break;
 		}
@@ -234,9 +240,12 @@ int main(int argc, char **argv) {
 	if (jack_connect (client, jack_port_name (output_port), ports[0])) {
 		fprintf (stderr, "cannot connect input ports\n");
 	}
+	if (jack_connect (client, jack_port_name (output_port), ports[1])) {
+		fprintf (stderr, "cannot connect input ports\n");
+	}
 
 	synth_init(&synth);
-	synth.attack = 200;
+	synth.attack = 10;
 	synth.decay = 100;
 	synth.sustain = 80;
 	synth.release = 50;

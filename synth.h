@@ -41,6 +41,18 @@ struct Sampler {
 int16_t sampler_sample(struct Sampler *sampler);
 void sampler_set_freq(fixed freq);
 
+#define IIR_LENGTH 2
+struct Filter {
+	float history[IIR_LENGTH * 2];
+	float coef[4 * IIR_LENGTH + 1];
+	float cutoff, q;
+};
+void filter_init(struct Filter *filter, float cutoff, float q);
+void filter_set_cutoff(struct Filter *filter, float cutoff); // frequency in Hz
+void filter_set_q(struct Filter *filter, float q);
+void filter_set_cutoff_q(struct Filter *filter, float cutoff, float q); // both
+float filter_sample(struct Filter *filter, float input);
+
 struct Voice {
 	uint32_t time;
 	uint16_t volume;
@@ -57,8 +69,13 @@ struct Voice {
 	uint16_t attack, decay, release; // in ms
 	uint16_t sustain; // percentage
 
+	fixed freq;
+	uint8_t note;
+
 	uint8_t unison_spread;
 	struct Oscillator osc[7];
+
+	struct Filter filter;
 };
 
 struct Synth;
@@ -75,7 +92,9 @@ void synth_init(struct Synth *synth);
 void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity);
 void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity);
 int16_t synth_render_sample(struct Synth *synth);
-void synth_set_pulse_width(struct Synth *s, uint8_t w);
-void synth_set_unison_spread(struct Synth *s, uint8_t w);
+void synth_set_pulse_width(struct Synth *s, uint8_t width);
+void synth_set_unison_spread(struct Synth *s, uint8_t spread);
+void synth_set_cutoff_freq(struct Synth *s, uint8_t freq);
+void synth_set_resonance(struct Synth *s, uint8_t freq);
 
 #endif /* SYNTH_H_ */
