@@ -35,7 +35,7 @@ typedef jack_default_audio_sample_t sample_t;
 const double PI = 3.14;
 
 jack_client_t *client;
-jack_port_t *output_port;
+jack_port_t *output_port_l, *output_port_r;
 unsigned long sr;
 int freq = 880;
 int bpm;
@@ -60,14 +60,20 @@ void usage () {
 }
 
 void process_silence (jack_nframes_t nframes) {
-	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port, nframes);
+	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port_l, nframes);
+	memset (buffer, 0, sizeof (jack_default_audio_sample_t) * nframes);
+	buffer = (sample_t *) jack_port_get_buffer (output_port_r, nframes);
 	memset (buffer, 0, sizeof (jack_default_audio_sample_t) * nframes);
 }
 
 void process_audio (jack_nframes_t nframes) {
-	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port, nframes);
+	sample_t *buffer_l = (sample_t *) jack_port_get_buffer (output_port_l, nframes);
+	sample_t *buffer_r = (sample_t *) jack_port_get_buffer (output_port_r, nframes);
 	for(int i = 0; i < nframes; i++) {
-		buffer[i] = synth_render_sample(&synth) / 32767.0;
+		int16_t out[2];
+		synth_render_sample(&synth, out);
+		buffer_l[i] = out[0] / 32767.0;
+		buffer_r[i] = out[1] / 32767.0;
 	}
 }
 
@@ -144,7 +150,7 @@ void midi_action(snd_seq_t *seq_handle) {
 		snd_seq_event_input(seq_handle, &ev);
 		switch (ev->type) {
 			case SND_SEQ_EVENT_NOTEON:
-				printf("Note on %d (%s) %d\n", ev->data.note.note, midi_note_name(ev->data.note.note), ev->data.note.velocity);
+				// printf("Note on %d (%s) %d\n", ev->data.note.note, midi_note_name(ev->data.note.note), ev->data.note.velocity);
 				synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_NOTEOFF:
@@ -152,17 +158,17 @@ void midi_action(snd_seq_t *seq_handle) {
 				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_CONTROLLER:
-				printf("CC %d %d\n", ev->data.control.param, ev->data.control.value);
-				if(ev->data.control.param == 93) {
-					synth_set_pulse_width(&synth, ev->data.control.value);
-				}
-				if(ev->data.control.param == 74) {
+				// printf("CC %d %d\n", ev->data.control.param, ev->data.control.value);
+				if(ev->data.control.param == 91) {
 					synth_set_unison_spread(&synth, ev->data.control.value);
 				}
-				if(ev->data.control.param == 71) {
+				if(ev->data.control.param == 93) {
+					synth_set_stereo_spread(&synth, ev->data.control.value);
+				}
+				if(ev->data.control.param == 74) {
 					synth_set_cutoff_freq(&synth, ev->data.control.value);
 				}
-				if(ev->data.control.param == 73) {
+				if(ev->data.control.param == 71) {
 					synth_set_resonance(&synth, ev->data.control.value);
 				}
 				break;
@@ -221,7 +227,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	jack_set_process_callback(client, process, 0);
-	output_port = jack_port_register(client, bpm_string, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	output_port_l = jack_port_register(client, "Synth Out L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	output_port_r = jack_port_register(client, "Synth Out R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	sr = jack_get_sample_rate(client);
 
@@ -237,18 +244,27 @@ int main(int argc, char **argv) {
 		exit (1);
 	}
 
-	if (jack_connect (client, jack_port_name (output_port), ports[0])) {
+	if (jack_connect (client, jack_port_name (output_port_l), ports[0])) {
 		fprintf (stderr, "cannot connect input ports\n");
 	}
-	if (jack_connect (client, jack_port_name (output_port), ports[1])) {
+	if (jack_connect (client, jack_port_name (output_port_r), ports[1])) {
 		fprintf (stderr, "cannot connect input ports\n");
 	}
 
+	// struct Filter f;
+	// for(i = 20; i <= 20000; i+=10) {
+	// 	for(int j = 1; j <= 10; j++) {
+	// 		filter_set_cutoff_q(&f, i, j);
+	// 	}
+	// }
+	// return 0;
+
 	synth_init(&synth);
-	synth.attack = 10;
+	synth.attack = 100;
 	synth.decay = 100;
 	synth.sustain = 80;
-	synth.release = 50;
+	synth.release = 100;
+
 
 	if (jack_activate (client)) {
 		fprintf (stderr, "cannot activate client");

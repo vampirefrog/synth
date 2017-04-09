@@ -19,6 +19,7 @@ struct Oscillator {
 	} type;
 
 	uint8_t pulse_width; // 0 - 127
+	int8_t pan;
 };
 
 int16_t oscillator_render_sample(struct Oscillator *osc);
@@ -73,15 +74,16 @@ struct Voice {
 	uint8_t note;
 
 	uint8_t unison_spread;
+	uint8_t stereo_spread;
 	struct Oscillator osc[7];
 
-	struct Filter filter;
+	struct Filter filter[2];
 };
 
 struct Synth;
 void voice_note_start(struct Voice *voice, uint8_t note, uint8_t velocity);
 void voice_stop(struct Voice *voice);
-int16_t voice_render_sample(struct Voice *voice);
+void voice_render_sample(struct Voice *voice, int16_t *out);
 
 struct Synth {
 	struct Voice voices[SYNTH_NUM_VOICES];
@@ -91,9 +93,10 @@ struct Synth {
 void synth_init(struct Synth *synth);
 void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity);
 void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity);
-int16_t synth_render_sample(struct Synth *synth);
+void synth_render_sample(struct Synth *synth, int16_t *out);
 void synth_set_pulse_width(struct Synth *s, uint8_t width);
 void synth_set_unison_spread(struct Synth *s, uint8_t spread);
+void synth_set_stereo_spread(struct Synth *s, uint8_t spread);
 void synth_set_cutoff_freq(struct Synth *s, uint8_t freq);
 void synth_set_resonance(struct Synth *s, uint8_t freq);
 

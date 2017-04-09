@@ -40,17 +40,22 @@ void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
 	voice_stop(voice);
 }
 
-int16_t synth_render_sample(struct Synth *synth) {
-	int32_t smpl = 0;
+void synth_render_sample(struct Synth *synth, int16_t *out) {
+	int32_t smpl[2] = { 0, 0 };
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 		struct Voice *v = synth->voices + i;
 		if(v->env_state == None)
 			continue;
-		smpl += voice_render_sample(v);
-		if(smpl > 32767) smpl = 32767;
-		if(smpl < -32768) smpl = -32768;
+		int16_t vsmpl[2];
+		voice_render_sample(v, vsmpl);
+		for(int j = 0; j < 2; j++) {
+			smpl[j] += vsmpl[j];
+			if(smpl[j] > 32767) smpl[j] = 32767;
+			if(smpl[j] < -32768) smpl[j] = -32768;
+		}
 	}
-	return smpl & 0xffff;
+	out[0] = smpl[0];
+	out[1] = smpl[1];
 }
 
 void synth_set_pulse_width(struct Synth *synth, uint8_t w) {
@@ -61,18 +66,19 @@ void synth_set_pulse_width(struct Synth *synth, uint8_t w) {
 }
 
 void synth_set_cutoff_freq(struct Synth *synth, uint8_t f) {
-	float freq = 20 + pow(2, f * 14.0 / 127.0);
+	float freq = 20.0 + pow(2, f * 14.0 / 127.0);
 	//float freq = 20 + 20000*sqrt(f/127.0);
-	printf("cutoff freq %d -> %f\n", f, freq);
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-		filter_set_cutoff(&synth->voices[i].filter, freq);
+		filter_set_cutoff(&synth->voices[i].filter[0], freq);
+		filter_set_cutoff(&synth->voices[i].filter[1], freq);
 	}
 }
 
 void synth_set_resonance(struct Synth *synth, uint8_t f) {
 	float q = 1 + f / 100.0;
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-		filter_set_q(&synth->voices[i].filter, q);
+		filter_set_q(&synth->voices[i].filter[0], q);
+		filter_set_q(&synth->voices[i].filter[1], q);
 	}
 }
 
@@ -84,6 +90,17 @@ void synth_set_unison_spread(struct Synth *synth, uint8_t w) {
 		if(v->env_state == None)
 			continue;
 		voice_calc_unison(v);
+	}
+}
+
+void voice_calc_stereo_spread(struct Voice *voice);
+void synth_set_stereo_spread(struct Synth *synth, uint8_t w) {
+	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
+		struct Voice *v = synth->voices + i;
+		v->stereo_spread = w;
+		if(v->env_state == None)
+			continue;
+		voice_calc_stereo_spread(v);
 	}
 }
 
@@ -109,7 +126,7 @@ int16_t oscillator_render_sample(struct Oscillator *osc) {
 	}
 }
 
-int16_t voice_render_sample(struct Voice *v) {
+void voice_render_sample(struct Voice *v, int16_t *out) {
 //	if(v->env_state == None)
 //		return 0;
 
@@ -147,10 +164,14 @@ int16_t voice_render_sample(struct Voice *v) {
 
 	v->time++;
 
-	int32_t ret = 0;
-	for(int i = 0; i < 7; i++) ret += oscillator_render_sample(&v->osc[i]);
-	return filter_sample(&v->filter, amplitude * ret / 32767.0);
-	//return amplitude * ret / 32767;
+	int32_t ret[2] = { 0, 0 };
+	for(int i = 0; i < 7; i++) {
+		int32_t s = oscillator_render_sample(&v->osc[i]);
+		ret[0] +=  (127 + v->osc[i].pan) * s / 255;
+		ret[1] += (127 - v->osc[i].pan) * s / 255;
+	}
+	out[0] = filter_sample(&v->filter[0], amplitude * ret[0] / 32767.0);
+	out[1] = filter_sample(&v->filter[1], amplitude * ret[1] / 32767.0);
 }
 
 void voice_calc_unison(struct Voice *voice) {
@@ -168,6 +189,24 @@ void voice_calc_unison(struct Voice *voice) {
 		voice->osc[i].freq = voice->osc[0].freq + voice->unison_spread * freq_above * (i - 3) / 3 / 127;
 		voice->osc[i].period = freq2period(voice->osc[i].freq);
 	}
+}
+
+void voice_calc_stereo_spread(struct Voice *voice) {
+	voice->osc[0].pan = 0;
+	for(int i = 1; i <= 7; i++) {
+		voice->osc[i].pan = ((i&1) * 2 - 1) * voice->stereo_spread * ((i + 1) / 2) / 3;
+	}
+	printf(
+		"Stereo spread %d -> %d  %d %d %d  %d %d %d\n",
+		voice->stereo_spread,
+		voice->osc[0].pan,
+		voice->osc[1].pan,
+		voice->osc[2].pan,
+		voice->osc[3].pan,
+		voice->osc[4].pan,
+		voice->osc[5].pan,
+		voice->osc[6].pan
+	);
 }
 
 void voice_note_start(struct Voice *voice, uint8_t note, uint8_t velocity) {
@@ -317,6 +356,12 @@ void filter_set_cutoff_q(struct Filter *filter, float cutoff, float q) {
 
 	/* Update overall filter gain in coef array */
 	filter->coef[0] = k;
+
+	printf("%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+		cutoff, q,
+		filter->coef[0],
+		filter->coef[1], filter->coef[2], filter->coef[3],
+		filter->coef[4], filter->coef[5], filter->coef[6]);
 }
 
 float filter_sample(struct Filter *filter, float input) {
