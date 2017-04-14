@@ -23,7 +23,6 @@
 #include <string.h>
 
 #include <jack/jack.h>
-#include <jack/transport.h>
 
 #include <asoundlib.h>
 
@@ -32,143 +31,150 @@ struct Synth synth;
 
 typedef jack_default_audio_sample_t sample_t;
 
-const double PI = 3.14;
-
+#define CLIENT_NAME "Vampi Synth"
 jack_client_t *client;
-jack_port_t *output_port_l, *output_port_r;
+jack_port_t *output_ports[2];
 unsigned long sr;
-int freq = 880;
-int bpm;
-jack_nframes_t tone_length, wave_length;
-sample_t *wave;
-long offset = 0;
-int transport_aware = 0;
-jack_transport_state_t transport_state;
-
-void usage () {
-	fprintf (stderr, "\n"
-"usage: vampisynth \n"
-"              [ --frequency OR -f frequency (in Hz) ]\n"
-"              [ --amplitude OR -A maximum amplitude (between 0 and 1) ]\n"
-"              [ --duration OR -D duration (in ms) ]\n"
-"              [ --attack OR -a attack (in percent of duration) ]\n"
-"              [ --decay OR -d decay (in percent of duration) ]\n"
-"              [ --name OR -n jack name for metronome client ]\n"
-"              [ --transport OR -t transport aware ]\n"
-"              --bpm OR -b beats per minute\n"
-);
-}
-
-void process_silence (jack_nframes_t nframes) {
-	sample_t *buffer = (sample_t *) jack_port_get_buffer (output_port_l, nframes);
-	memset (buffer, 0, sizeof (jack_default_audio_sample_t) * nframes);
-	buffer = (sample_t *) jack_port_get_buffer (output_port_r, nframes);
-	memset (buffer, 0, sizeof (jack_default_audio_sample_t) * nframes);
-}
-
-void process_audio (jack_nframes_t nframes) {
-	sample_t *buffer_l = (sample_t *) jack_port_get_buffer (output_port_l, nframes);
-	sample_t *buffer_r = (sample_t *) jack_port_get_buffer (output_port_r, nframes);
-	for(int i = 0; i < nframes; i++) {
-		int16_t out[2];
-		synth_render_sample(&synth, out);
-		buffer_l[i] = out[0] / 32767.0;
-		buffer_r[i] = out[1] / 32767.0;
-	}
-}
+int verbose = 0;
 
 int process (jack_nframes_t nframes, void *arg) {
-	if (transport_aware) {
-		jack_position_t pos;
-
-		if (jack_transport_query (client, &pos)
-				!= JackTransportRolling) {
-
-			process_silence (nframes);
-			return 0;
-		}
-		offset = pos.frame % wave_length;
+	sample_t *buffers[2];
+	buffers[0] = (sample_t *) jack_port_get_buffer (output_ports[0], nframes);
+	buffers[1] = (sample_t *) jack_port_get_buffer (output_ports[1], nframes);
+	for(int i = 0; i < nframes; i++) {
+		float out[2];
+		synth_render_sample(&synth, out);
+		buffers[0][i] = out[0];
+		buffers[1][i] = out[1];
 	}
-	process_audio (nframes);
 	return 0;
 }
 
-int
-sample_rate_change () {
-	printf("Sample rate has changed! Exiting...\n");
-	exit(-1);
-}
-
 static char *midi_note_names[12] = {
-	"C",
-	"C#",
-	"D",
-	"D#",
-	"E",
-	"F",
-	"F#",
-	"G",
-	"G#",
-	"A",
-	"A#",
-	"B",
+	"C", "C#", "D", "D#", "E", "F",
+	"F#", "G", "G#", "A", "A#", "B",
 };
 
 const char *midi_note_name(int note) {
 	return midi_note_names[note % 12];
 }
 
-snd_seq_t *open_seq();
-void midi_action(snd_seq_t *seq_handle);
-
-snd_seq_t *open_seq() {
-
-	snd_seq_t *seq_handle;
-	int portid;
-
-	if (snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0) < 0) {
-		fprintf(stderr, "Error opening ALSA sequencer.\n");
-		exit(1);
+const char *midi_cc_name(int cc) {
+	switch(cc) {
+		case MIDI_CTL_ALL_NOTES_OFF: return "All notes off";
+		case MIDI_CTL_ALL_SOUNDS_OFF: return "All sounds off";
+		case MIDI_CTL_DATA_DECREMENT: return "Data Decrement";
+		case MIDI_CTL_DATA_INCREMENT: return "Data Increment";
+		case MIDI_CTL_E1_REVERB_DEPTH: return "E1 Reverb Depth";
+		case MIDI_CTL_E2_TREMOLO_DEPTH: return "E2 Tremolo Depth";
+		case MIDI_CTL_E3_CHORUS_DEPTH: return "E3 Chorus Depth";
+		case MIDI_CTL_E4_DETUNE_DEPTH: return "E4 Detune Depth";
+		case MIDI_CTL_E5_PHASER_DEPTH: return "E5 Phaser Depth";
+		case MIDI_CTL_GENERAL_PURPOSE5: return "General purpose 5";
+		case MIDI_CTL_GENERAL_PURPOSE6: return "General purpose 6";
+		case MIDI_CTL_GENERAL_PURPOSE7: return "General purpose 7";
+		case MIDI_CTL_GENERAL_PURPOSE8: return "General purpose 8";
+		case MIDI_CTL_HOLD2: return "Hold2";
+		case MIDI_CTL_LEGATO_FOOTSWITCH: return "Legato foot switch";
+		case MIDI_CTL_LOCAL_CONTROL_SWITCH: return "Local control switch";
+		case MIDI_CTL_LSB_BALANCE: return "Balance";
+		case MIDI_CTL_LSB_BANK: return "Bank selection";
+		case MIDI_CTL_LSB_BREATH: return "Breath";
+		case MIDI_CTL_LSB_DATA_ENTRY: return "Data entry";
+		case MIDI_CTL_LSB_EFFECT1: return "Effect1";
+		case MIDI_CTL_LSB_EFFECT2: return "Effect2";
+		case MIDI_CTL_LSB_EXPRESSION: return "Expression";
+		case MIDI_CTL_LSB_FOOT: return "Foot";
+		case MIDI_CTL_LSB_GENERAL_PURPOSE1: return "General purpose 1";
+		case MIDI_CTL_LSB_GENERAL_PURPOSE2: return "General purpose 2";
+		case MIDI_CTL_LSB_GENERAL_PURPOSE3: return "General purpose 3";
+		case MIDI_CTL_LSB_GENERAL_PURPOSE4: return "General purpose 4";
+		case MIDI_CTL_LSB_MAIN_VOLUME: return "Main volume";
+		case MIDI_CTL_LSB_MODWHEEL: return "Modulation";
+		case MIDI_CTL_LSB_PAN: return "Panpot";
+		case MIDI_CTL_LSB_PORTAMENTO_TIME: return "Portamento time";
+		case MIDI_CTL_MONO1: return "Mono1";
+		case MIDI_CTL_MONO2: return "Mono2";
+		case MIDI_CTL_MSB_BALANCE: return "Balance";
+		case MIDI_CTL_MSB_BANK: return "Bank selection";
+		case MIDI_CTL_MSB_BREATH: return "Breath";
+		case MIDI_CTL_MSB_DATA_ENTRY: return "Data entry";
+		case MIDI_CTL_MSB_EFFECT1: return "Effect1";
+		case MIDI_CTL_MSB_EFFECT2: return "Effect2";
+		case MIDI_CTL_MSB_EXPRESSION: return "Expression";
+		case MIDI_CTL_MSB_FOOT: return "Foot";
+		case MIDI_CTL_MSB_GENERAL_PURPOSE1: return "General purpose 1";
+		case MIDI_CTL_MSB_GENERAL_PURPOSE2: return "General purpose 2";
+		case MIDI_CTL_MSB_GENERAL_PURPOSE3: return "General purpose 3";
+		case MIDI_CTL_MSB_GENERAL_PURPOSE4: return "General purpose 4";
+		case MIDI_CTL_MSB_MAIN_VOLUME: return "Main volume";
+		case MIDI_CTL_MSB_MODWHEEL: return "Modulation";
+		case MIDI_CTL_MSB_PAN: return "Panpot";
+		case MIDI_CTL_MSB_PORTAMENTO_TIME: return "Portamento time";
+		case MIDI_CTL_NONREG_PARM_NUM_LSB: return "Non-registered parameter number";
+		case MIDI_CTL_NONREG_PARM_NUM_MSB: return "Non-registered parameter number";
+		case MIDI_CTL_OMNI_OFF: return "Omni off";
+		case MIDI_CTL_OMNI_ON: return "Omni on";
+		case MIDI_CTL_PORTAMENTO: return "Portamento";
+		case MIDI_CTL_PORTAMENTO_CONTROL: return "Portamento control";
+		case MIDI_CTL_REGIST_PARM_NUM_LSB: return "Registered parameter number";
+		case MIDI_CTL_REGIST_PARM_NUM_MSB: return "Registered parameter number";
+		case MIDI_CTL_RESET_CONTROLLERS: return "Reset Controllers";
+		case MIDI_CTL_SC10: return "SC10";
+		case MIDI_CTL_SC1_SOUND_VARIATION: return "SC1 Sound Variation";
+		case MIDI_CTL_SC2_TIMBRE: return "SC2 Timbre";
+		case MIDI_CTL_SC3_RELEASE_TIME: return "SC3 Release Time";
+		case MIDI_CTL_SC4_ATTACK_TIME: return "SC4 Attack Time";
+		case MIDI_CTL_SC5_BRIGHTNESS: return "SC5 Brightness";
+		case MIDI_CTL_SC6: return "SC6";
+		case MIDI_CTL_SC7: return "SC7";
+		case MIDI_CTL_SC8: return "SC8";
+		case MIDI_CTL_SC9: return "SC9";
+		case MIDI_CTL_SOFT_PEDAL: return "Soft pedal";
+		case MIDI_CTL_SOSTENUTO: return "Sostenuto";
+		case MIDI_CTL_SUSTAIN: return "Sustain pedal";
 	}
-	snd_seq_set_client_name(seq_handle, "Vampi Synth");
-	if ((portid = snd_seq_create_simple_port(seq_handle, "Cornhole",
-						SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE,
-						SND_SEQ_PORT_TYPE_APPLICATION)) < 0) {
-		fprintf(stderr, "Error creating sequencer port.\n");
-		exit(1);
-	}
 
-	snd_seq_connect_from(seq_handle, portid, 36, 0);
-	return(seq_handle);
+	return "Unknown";
 }
 
 void midi_action(snd_seq_t *seq_handle) {
-
 	snd_seq_event_t *ev;
 
 	do {
 		snd_seq_event_input(seq_handle, &ev);
 		switch (ev->type) {
 			case SND_SEQ_EVENT_NOTEON:
-				// printf("Note on %d (%s) %d\n", ev->data.note.note, midi_note_name(ev->data.note.note), ev->data.note.velocity);
+				if(verbose)
+					printf("Note on %s (%d) %d\n", midi_note_name(ev->data.note.note), ev->data.note.note, ev->data.note.velocity);
 				synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_NOTEOFF:
-				// printf("Note off %d\n", ev->data.note.note);
+				if(verbose)
+					printf("Note off %s (%d) %d\n", midi_note_name(ev->data.note.note), ev->data.note.note, ev->data.note.velocity);
 				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_CONTROLLER:
-				// printf("CC %d %d\n", ev->data.control.param, ev->data.control.value);
+				if(verbose)
+					printf("CC 0x%02x (%s) %d\n", ev->data.control.param, midi_cc_name(ev->data.control.param), ev->data.control.value);
 				if(ev->data.control.param == 91) {
+					if(verbose)
+						printf("Unison spread %d\n", ev->data.control.value);
 					synth_set_unison_spread(&synth, ev->data.control.value);
 				}
 				if(ev->data.control.param == 93) {
+					if(verbose)
+						printf("Stereo spread %d\n", ev->data.control.value);
 					synth_set_stereo_spread(&synth, ev->data.control.value);
 				}
 				if(ev->data.control.param == 74) {
+					if(verbose)
+						printf("Cutoff %d\n", ev->data.control.value);
 					synth_set_cutoff_freq(&synth, ev->data.control.value);
 				}
 				if(ev->data.control.param == 71) {
+					if(verbose)
+						printf("Resonance %d\n", ev->data.control.value);
 					synth_set_resonance(&synth, ev->data.control.value);
 				}
 				break;
@@ -177,22 +183,17 @@ void midi_action(snd_seq_t *seq_handle) {
 	} while (snd_seq_event_input_pending(seq_handle, 0) > 0);
 }
 
-
 int main(int argc, char **argv) {
-	sample_t scale;
-	int i, attack_length, decay_length;
 	int option_index;
 	int opt;
-	char *client_name = 0;
-	char *bpm_string = "synth out";
-	int verbose = 0;
+	char *client_name = CLIENT_NAME;
+	char *input_seq_addr = 0;
 	jack_status_t status;
 
-	const char *options = "f:A:D:a:d:b:n:thv";
-	struct option long_options[] =
-	{
+	const char *options = "n:p:hv";
+	struct option long_options[] = {
 		{"name", 1, 0, 'n'},
-		{"transport", 0, 0, 't'},
+		{"port", 1, 0, 'p'},
 		{"help", 0, 0, 'h'},
 		{"verbose", 0, 0, 'v'},
 		{0, 0, 0, 0}
@@ -204,35 +205,38 @@ int main(int argc, char **argv) {
 			client_name = (char *) malloc (strlen (optarg) * sizeof (char));
 			strcpy (client_name, optarg);
 			break;
-		case 't':
-			transport_aware = 1;
+		case 'p':
+			input_seq_addr = optarg;
 			break;
-		default:
-			fprintf (stderr, "unknown option %c\n", opt);
-		case 'h':
-			usage ();
-			return -1;
 		case 'v':
 			verbose = 1;
 			break;
+		default:
+			fprintf (stderr, "Unknown option %c\n", opt);
+		case 'h':
+			fprintf(stderr, "usage: %s [options]\n"
+				"\t-p, --port <port name>   Input port for sequencer events (MIDI keyboard)\n"
+				"\t-n, --name <name>.       Jack client name. Default: " CLIENT_NAME " ]\n"
+				"\t-v    Verbose\n"
+				"\t-h    Help\n",
+				argv[0]
+			);
+			return -1;
 		}
 	}
 
 	/* Initial Jack setup, get sample rate */
-	if (!client_name) {
-		client_name = strdup("vampi va");
-	}
 	if ((client = jack_client_open (client_name, JackNoStartServer, &status)) == 0) {
 		fprintf (stderr, "jack server not running?\n");
 		return 1;
 	}
 	jack_set_process_callback(client, process, 0);
-	output_port_l = jack_port_register(client, "Synth Out L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	output_port_r = jack_port_register(client, "Synth Out R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	output_ports[0] = jack_port_register(client, "Synth Out L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	output_ports[1] = jack_port_register(client, "Synth Out R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	sr = jack_get_sample_rate(client);
 
-	if (jack_activate (client)) {
+	if (jack_activate(client)) {
 		fprintf (stderr, "cannot activate client");
 		exit (1);
 	}
@@ -244,29 +248,26 @@ int main(int argc, char **argv) {
 		exit (1);
 	}
 
-	if (jack_connect (client, jack_port_name (output_port_l), ports[0])) {
-		fprintf (stderr, "cannot connect input ports\n");
-	}
-	if (jack_connect (client, jack_port_name (output_port_r), ports[1])) {
+	if (jack_connect (client, jack_port_name (output_ports[0]), ports[0])) {
 		fprintf (stderr, "cannot connect input ports\n");
 	}
 
-	// struct Filter f;
-	// for(i = 20; i <= 20000; i+=10) {
-	// 	for(int j = 1; j <= 10; j++) {
-	// 		filter_set_cutoff_q(&f, i, j);
-	// 	}
-	// }
-	// return 0;
+	if (jack_connect (client, jack_port_name (output_ports[1]), ports[1])) {
+		fprintf (stderr, "cannot connect input ports\n");
+	}
 
 	synth_init(&synth);
-	synth.attack = 100;
-	synth.decay = 100;
-	synth.sustain = 80;
-	synth.release = 100;
+	synth.osc_env.attack = 2;
+	synth.osc_env.decay = 100;
+	synth.osc_env.sustain = 90;
+	synth.osc_env.release = 100;
+	synth.filter_env.attack = 1000;
+	synth.filter_env.decay = 200;
+	synth.filter_env.sustain = 90;
+	synth.filter_env.release = 100;
+	synth.monophonic = 1;
 
-
-	if (jack_activate (client)) {
+	if (jack_activate(client)) {
 		fprintf (stderr, "cannot activate client");
 		return 1;
 	}
@@ -274,8 +275,30 @@ int main(int argc, char **argv) {
 	snd_seq_t *seq_handle;
 	int npfd;
 	struct pollfd *pfd;
+	int portid;
 
-	seq_handle = open_seq();
+	if (snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0) < 0) {
+		fprintf(stderr, "Error opening ALSA sequencer.\n");
+		exit(1);
+	}
+	snd_seq_set_client_name(seq_handle, client_name);
+	if ((portid = snd_seq_create_simple_port(seq_handle, "Cornhole",
+						SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE,
+						SND_SEQ_PORT_TYPE_APPLICATION)) < 0) {
+		fprintf(stderr, "Error creating sequencer port.\n");
+		exit(1);
+	}
+
+	snd_seq_addr_t seq_input_port;
+	if(input_seq_addr) {
+		if(snd_seq_parse_address(seq_handle, &seq_input_port, input_seq_addr) == 0) {
+			snd_seq_connect_from(seq_handle, portid, seq_input_port.client, seq_input_port.port);
+		} else {
+			fprintf(stderr, "Could not parse port: %s\n", input_seq_addr);
+			exit(1);
+		}
+	}
+
 	npfd = snd_seq_poll_descriptors_count(seq_handle, POLLIN);
 	pfd = (struct pollfd *)alloca(npfd * sizeof(struct pollfd));
 	snd_seq_poll_descriptors(seq_handle, pfd, npfd, POLLIN);
