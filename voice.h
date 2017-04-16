@@ -6,10 +6,15 @@
 #include "oscillator.h"
 #include "filter.h"
 
+struct Synth;
 struct Voice {
+	struct Synth *synth;
+
 	uint8_t note;
+	float detune;
 	float volume;
 	int8_t pan;
+	uint32_t time;
 
 	struct Envelope osc_env, filter_env;
 	struct Oscillator osc;

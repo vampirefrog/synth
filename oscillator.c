@@ -1,4 +1,5 @@
 #include "oscillator.h"
+#include "config.h"
 
 int16_t oscillator_render_sample(struct Oscillator *osc) {
 	if(osc->period == 0) return 0;
@@ -14,4 +15,8 @@ int16_t oscillator_render_sample(struct Oscillator *osc) {
 		osc->sub_phase -= sub_period;
 
 	return (1 << 13) - (osc->phase << 3) / (osc->period >> 11) + (osc->sub_phase - osc->period / 2 > osc->period ? 4096 : -4096);
+}
+
+void oscillator_set_freq(struct Oscillator *osc, float freq) {
+	osc->period = ((float)SAMPLE_RATE / freq) * 65536.0;
 }

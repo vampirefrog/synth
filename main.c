@@ -42,7 +42,7 @@ int process (jack_nframes_t nframes, void *arg) {
 	buffers[0] = (sample_t *) jack_port_get_buffer (output_ports[0], nframes);
 	buffers[1] = (sample_t *) jack_port_get_buffer (output_ports[1], nframes);
 	for(int i = 0; i < nframes; i++) {
-		float out[2];
+		float out[2] = {0, 0};
 		synth_render_sample(&synth, out);
 		buffers[0][i] = out[0];
 		buffers[1][i] = out[1];
@@ -154,25 +154,33 @@ void midi_action(snd_seq_t *seq_handle) {
 					printf("Note off %s (%d) %d\n", midi_note_name(ev->data.note.note), ev->data.note.note, ev->data.note.velocity);
 				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
+			case SND_SEQ_EVENT_PITCHBEND:
+				synth_pitch_bend(&synth, ev->data.control.value);
+				break;
 			case SND_SEQ_EVENT_CONTROLLER:
 				if(verbose)
 					printf("CC 0x%02x (%s) %d\n", ev->data.control.param, midi_cc_name(ev->data.control.param), ev->data.control.value);
-				if(ev->data.control.param == 91) {
+				if(ev->data.control.param == 0x01) {
+					if(verbose)
+						printf("LFO Depth %d\n", ev->data.control.value);
+					synth_set_lfo_depth(&synth, ev->data.control.value);
+				} else if(ev->data.control.param == 7) {
+					if(verbose)
+						printf("Volume %d\n", ev->data.control.value);
+					synth_set_volume(&synth, ev->data.control.value);
+				} else if(ev->data.control.param == 91) {
 					if(verbose)
 						printf("Unison spread %d\n", ev->data.control.value);
 					synth_set_unison_spread(&synth, ev->data.control.value);
-				}
-				if(ev->data.control.param == 93) {
+				} else if(ev->data.control.param == 93) {
 					if(verbose)
 						printf("Stereo spread %d\n", ev->data.control.value);
 					synth_set_stereo_spread(&synth, ev->data.control.value);
-				}
-				if(ev->data.control.param == 74) {
+				} else if(ev->data.control.param == 74) {
 					if(verbose)
 						printf("Cutoff %d\n", ev->data.control.value);
 					synth_set_cutoff_freq(&synth, ev->data.control.value);
-				}
-				if(ev->data.control.param == 71) {
+				} else if(ev->data.control.param == 71) {
 					if(verbose)
 						printf("Resonance %d\n", ev->data.control.value);
 					synth_set_resonance(&synth, ev->data.control.value);
@@ -236,6 +244,21 @@ int main(int argc, char **argv) {
 
 	sr = jack_get_sample_rate(client);
 
+	synth_init(&synth);
+	synth.osc_env.attack = 2;
+	synth.osc_env.decay = 200;
+	synth.osc_env.sustain = 100;
+	synth.osc_env.release = 100;
+	synth.filter_env.attack = 150;
+	synth.filter_env.decay = 100;
+	synth.filter_env.sustain = 100;
+	synth.filter_env.release = 100;
+	synth.filter_eg_intensity = .8;
+	synth.filter_kbd_track = .5;
+	sine_osc_set_freq(&synth.lfo_osc, 6);
+	synth.pitch_bend_range = 12; // semitones
+//	synth.monophonic = 1;
+
 	if (jack_activate(client)) {
 		fprintf (stderr, "cannot activate client");
 		exit (1);
@@ -254,22 +277,6 @@ int main(int argc, char **argv) {
 
 	if (jack_connect (client, jack_port_name (output_ports[1]), ports[1])) {
 		fprintf (stderr, "cannot connect input ports\n");
-	}
-
-	synth_init(&synth);
-	synth.osc_env.attack = 2;
-	synth.osc_env.decay = 100;
-	synth.osc_env.sustain = 90;
-	synth.osc_env.release = 100;
-	synth.filter_env.attack = 1000;
-	synth.filter_env.decay = 200;
-	synth.filter_env.sustain = 90;
-	synth.filter_env.release = 100;
-	synth.monophonic = 1;
-
-	if (jack_activate(client)) {
-		fprintf (stderr, "cannot activate client");
-		return 1;
 	}
 
 	snd_seq_t *seq_handle;

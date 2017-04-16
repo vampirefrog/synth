@@ -18,6 +18,6 @@ struct Oscillator {
 };
 
 int16_t oscillator_render_sample(struct Oscillator *osc);
-void oscillator_set_freq(fixed freq); // fixed 16.16
+void oscillator_set_freq(struct Oscillator *osc, float freq); // fixed 16.16
 
 #endif /* OSCILLATOR_H_ */
