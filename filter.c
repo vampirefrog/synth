@@ -46,8 +46,8 @@ void filter_set_resonance(struct Filter *filter, float resonance) {
 float filter_sample(struct Filter *filter, float input) {
 	if(++filter->last_calc >= 16) {
 		filter->last_calc = 0;
-		filter->cutoff_calc = pow (0.5, 8.5 - (filter->cutoff)*8  );
-		filter->resonance_calc = filter->resonance;
+		filter->cutoff_calc = pow(0.5, 8.5 - filter->cutoff * 8);
+		filter->resonance_calc = pow(0.5, (1.0 - filter->resonance) * 4.5);
 	}
 	float cutoff = filter->cutoff_calc;
 	float resonance = filter->resonance_calc;

@@ -8,8 +8,8 @@ void voice_render_sample(struct Voice *v, float *out) {
 	float s = oscillator_render_sample(&v->osc);
 	filter_set_cutoff(&v->filter, v->synth->cutoff + cutoff * v->synth->filter_eg_intensity);
 	float f = filter_sample(&v->filter, v->volume * amplitude * s / 32768.0);
-	out[0] = (127 + v->pan) * f / 255.0;
-	out[1] = (127 - v->pan) * f / 255.0;
+	out[0] = (1 + v->pan) * f / 2;
+	out[1] = (1 - v->pan) * f / 2;
 	v->time++;
 }
 

@@ -20,8 +20,8 @@ struct Key {
 struct Synth {
 	struct Voice voices[SYNTH_NUM_VOICES];
 	struct Envelope osc_env, filter_env;
-	uint8_t unison_spread;
-	uint8_t stereo_spread;
+	float unison_spread;
+	float stereo_spread;
 	uint8_t monophonic;
 
 	float tuning; // 440.0Hz

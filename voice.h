@@ -13,7 +13,7 @@ struct Voice {
 	uint8_t note;
 	float detune;
 	float volume;
-	int8_t pan;
+	float pan;
 	uint32_t time;
 
 	struct Envelope osc_env, filter_env;

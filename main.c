@@ -245,19 +245,19 @@ int main(int argc, char **argv) {
 	sr = jack_get_sample_rate(client);
 
 	synth_init(&synth);
-	synth.osc_env.attack = 2;
-	synth.osc_env.decay = 200;
+	synth.osc_env.attack = 1;
+	synth.osc_env.decay = 0;
 	synth.osc_env.sustain = 100;
 	synth.osc_env.release = 100;
-	synth.filter_env.attack = 150;
-	synth.filter_env.decay = 100;
-	synth.filter_env.sustain = 100;
-	synth.filter_env.release = 100;
-	synth.filter_eg_intensity = .8;
+	synth.filter_env.attack = 1;
+	synth.filter_env.decay = 300;
+	synth.filter_env.sustain = 0;
+	synth.filter_env.release = 0;
+	synth.filter_eg_intensity = .9;
 	synth.filter_kbd_track = .5;
 	sine_osc_set_freq(&synth.lfo_osc, 6);
 	synth.pitch_bend_range = 12; // semitones
-//	synth.monophonic = 1;
+	synth.monophonic = 1;
 
 	if (jack_activate(client)) {
 		fprintf (stderr, "cannot activate client");

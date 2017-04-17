@@ -9,7 +9,7 @@
 #include "tables.inc"
 
 void synth_init(struct Synth *synth) {
-	synth_set_cutoff_freq(synth, 127);
+	synth_set_cutoff_freq(synth, 0);
 	synth_set_resonance(synth, 0);
 	srandom(1234);
 	synth->key_stack_size = 0;
@@ -133,11 +133,6 @@ void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
 				voice_stop(&synth->voices[i]);
 			}
 		}
-		printf("voices: ");
-		for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-			printf("%d%d ", synth->voices[i].osc_env.state, synth->voices[i].filter_env.state);
-		}
-		printf("\n");
 	}
 }
 
@@ -175,11 +170,11 @@ void synth_set_resonance(struct Synth *synth, uint8_t f) {
 }
 
 void synth_set_unison_spread(struct Synth *synth, uint8_t w) {
-	synth->unison_spread = w;
+	synth->unison_spread = w / 127.0;
 }
 
 void synth_set_stereo_spread(struct Synth *synth, uint8_t w) {
-	synth->stereo_spread = w;
+	synth->stereo_spread = w / 127.0;
 }
 
 void synth_set_volume(struct Synth *s, uint8_t vol) {
