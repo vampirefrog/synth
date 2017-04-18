@@ -191,3 +191,61 @@ void synth_pitch_bend(struct Synth *s, int16_t bend) {
 void synth_set_lfo_depth(struct Synth *s, uint8_t mod) {
 	s->lfo_depth = mod / 127.0;
 }
+
+void synth_load_patch(struct Synth *s, const char *filename) {
+	FILE *f = fopen(filename, "r");
+	if(!f) {
+		perror(filename);
+		return;
+	}
+	char buf[256];
+	while(!feof(f)) {
+		fgets(buf, sizeof(buf), f);
+		char *tok = strtok(buf, " \t");
+		if(tok) {
+			char *val = strtok(NULL, " \t");
+			if(val) {
+				if(!strcmp(tok, "lfo_freq")) {
+					sine_osc_set_freq(&s->lfo_osc, strtof(val, NULL));
+				} else if(!strcmp(tok, "osc_env.attack")) {
+					s->osc_env.attack = strtof(val, NULL);
+				} else if(!strcmp(tok, "osc_env.decay")) {
+					s->osc_env.decay = strtof(val, NULL);
+				} else if(!strcmp(tok, "osc_env.sustain")) {
+					s->osc_env.sustain = strtof(val, NULL);
+				} else if(!strcmp(tok, "osc_env.release")) {
+					s->osc_env.release = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_env.attack")) {
+					printf("filter_env.attack %f\n", strtof(val, NULL));
+					s->filter_env.attack = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_env.decay")) {
+					printf("filter_env.decay %f\n", strtof(val, NULL));
+					s->filter_env.decay = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_env.sustain")) {
+					s->filter_env.sustain = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_env.release")) {
+					s->filter_env.release = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_eg_intensity")) {
+					s->filter_eg_intensity  = strtof(val, NULL);
+				} else if(!strcmp(tok, "filter_kbd_track")) {
+					s->filter_kbd_track = strtof(val, NULL);
+				} else if(!strcmp(tok, "pitch_bend_range")) {
+					s->pitch_bend_range = strtof(val, NULL);
+				} else if(!strcmp(tok, "monophonic")) {
+					s->monophonic = atoi(val);
+				} else if(!strcmp(tok, "unison_spread")) {
+					s->unison_spread = strtof(val, NULL);
+				} else if(!strcmp(tok, "stereo_spread")) {
+					s->stereo_spread = strtof(val, NULL);
+				} else if(!strcmp(tok, "cutoff")) {
+					s->cutoff = strtof(val, NULL);
+				} else if(!strcmp(tok, "resonance")) {
+					for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
+						filter_set_resonance(&s->voices[i].filter, strtof(val, NULL));
+					}
+				}
+			}
+		}
+	}
+	fclose(f);
+}

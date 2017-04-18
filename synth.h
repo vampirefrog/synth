@@ -37,6 +37,7 @@ struct Synth {
 };
 
 void synth_init(struct Synth *synth);
+void synth_load_patch(struct Synth *synth, const char *filename);
 void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity);
 void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity);
 void synth_render_sample(struct Synth *synth, float *out);
