@@ -40,19 +40,32 @@ static void synth_set_pitch(struct Synth *synth) {
 	}
 }
 
-static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t velocity) {
+static void synth_spread_unison(struct Synth *synth) {
 	synth->voices[0].detune = 0;
 	for(int i = 1; i <= 3; i++) {
 		synth->voices[i].detune = i * synth->unison_spread / 6.0;
 	}
 	for(int i = 4; i < 7; i++) {
-		synth->voices[i].detune = (i - 3) * synth->unison_spread / 6.0;
+		synth->voices[i].detune = (i - 7) * synth->unison_spread / 6.0;
 	}
+	for(int i = 0; i < 7; i++) {
+		printf("voice %d detune %f\n", i, synth->voices[i].detune);
+	}
+}
 
+static void synth_spread_stereo(struct Synth *synth) {
 	synth->voices[0].pan = 0;
 	for(int i = 1; i <= 7; i++) {
 		synth->voices[i].pan = ((i&1) * 2 - 1) * synth->stereo_spread * ((i + 1) / 2) / 3;
 	}
+	for(int i = 0; i < 7; i++) {
+		printf("voice %d pan %f\n", i, synth->voices[i].pan);
+	}
+}
+
+static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t velocity) {
+	synth_spread_unison(synth);
+	synth_spread_stereo(synth);
 
 	for(int i = 0; i < 7; i++) {
 		struct Voice *voice = synth->voices + i;
@@ -108,7 +121,6 @@ void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity) {
 
 		voice_note_start(found, note, velocity);
 	}
-
 }
 
 static void synth_note_off_monophonic(struct Synth *synth) {
@@ -171,10 +183,12 @@ void synth_set_resonance(struct Synth *synth, uint8_t f) {
 
 void synth_set_unison_spread(struct Synth *synth, uint8_t w) {
 	synth->unison_spread = w / 127.0;
+	synth_spread_unison(synth);
 }
 
 void synth_set_stereo_spread(struct Synth *synth, uint8_t w) {
 	synth->stereo_spread = w / 127.0;
+	synth_spread_stereo(synth);
 }
 
 void synth_set_volume(struct Synth *s, uint8_t vol) {
