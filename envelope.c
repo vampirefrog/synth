@@ -1,53 +1,104 @@
+#include <math.h>
+
 #include "envelope.h"
 #include "config.h"
 
+void envelope_init(struct Envelope *env) {
+	envelope_reset(env);
+	envelope_set_attack_rate(env, 0);
+	envelope_set_decay_rate(env, 0);
+	envelope_set_release_rate(env, 0);
+	envelope_set_sustain_level(env, 1.0);
+	envelope_set_target_ratio_a(env, 0.3);
+	envelope_set_target_ratio_dr(env, 0.0001);
+	printf("envelope_init()\n");
+}
+
+void envelope_reset(struct Envelope *env) {
+	env->state = EnvNone;
+	env->output = 0.0;
+}
+
 void envelope_start(struct Envelope *env) {
-	env->state = Attack;
-	env->time = 0;
+	env->state = EnvAttack;
 }
 
 void envelope_stop(struct Envelope *env) {
-	env->state = Release;
-	env->time = 0;
+	if (env->state != EnvNone)
+		env->state = EnvRelease;
+}
+
+static inline float calc_coef(float rate, float target_ratio) {
+	return (rate <= 0) ? 0.0 : exp(-log((1.0 + target_ratio) / target_ratio) / rate);
+}
+
+void envelope_set_attack_rate(struct Envelope *env, float rate) {
+	env->attack_rate = rate;
+	env->attack_coef = calc_coef(rate, env->target_ratio_a);
+	env->attack_base = (1.0 + env->target_ratio_a) * (1.0 - env->attack_coef);
+}
+
+void envelope_set_decay_rate(struct Envelope *env, float rate) {
+	env->decay_rate = rate;
+	env->decay_coef = calc_coef(rate, env->target_ratio_dr);
+	env->decay_base = (env->sustain_level - env->target_ratio_dr) * (1.0 - env->decay_coef);
+}
+
+void envelope_set_release_rate(struct Envelope *env, float rate) {
+	env->release_rate = rate;
+	env->release_coef = calc_coef(rate, env->target_ratio_dr);
+	env->release_base = -env->target_ratio_dr * (1.0 - env->release_coef);
+}
+
+void envelope_set_sustain_level(struct Envelope *env, float level) {
+	env->sustain_level = level;
+	env->decay_base = (env->sustain_level - env->target_ratio_dr) * (1.0 - env->decay_coef);
+}
+
+void envelope_set_target_ratio_a(struct Envelope *env, float target_ratio) {
+	if (target_ratio < 0.000000001)
+		target_ratio = 0.000000001;  // -180 dB
+	env->target_ratio_a = target_ratio;
+	env->attack_coef = calc_coef(env->attack_rate, target_ratio);
+	env->attack_base = (1.0 + env->target_ratio_a) * (1.0 - env->attack_coef);
+}
+
+void envelope_set_target_ratio_dr(struct Envelope *env, float target_ratio) {
+	if (target_ratio < 0.000000001)
+		target_ratio = 0.000000001;  // -180 dB
+	env->target_ratio_dr = target_ratio;
+	env->decay_coef = calc_coef(env->decay_rate, env->target_ratio_dr);
+	env->release_coef = calc_coef(env->release_rate, env->target_ratio_dr);
+	env->decay_base = (env->sustain_level - env->target_ratio_dr) * (1.0 - env->decay_coef);
+	env->release_base = -env->target_ratio_dr * (1.0 - env->release_coef);
 }
 
 float envelope_sample(struct Envelope *env) {
-	if(env->state == None) return 0;
-
-	float ret = 0;
-
-	uint32_t ms_time = env->time * 1000 / SAMPLE_RATE;
 	switch(env->state) {
-		case Attack:
-			if(ms_time > env->attack) {
-				env->state = Decay;
-				env->time = 0;
-			} else if(env->attack > 0) {
-				ret = (float)ms_time / (float)env->attack;
+		case EnvAttack:
+			env->output = env->attack_base + env->output * env->attack_coef;
+			if (env->output >= 1.0) {
+				env->output = 1.0;
+				env->state = EnvDecay;
 			}
 			break;
-		case Decay:
-			if(ms_time > env->decay) {
-				env->state = Sustain;
-				env->time = 0;
-			} else if(env->decay > 0) {
-				ret = ((env->decay - ms_time) + env->sustain * ms_time / 100.0) / (float)env->decay;
+		case EnvDecay:
+			env->output = env->decay_base + env->output * env->decay_coef;
+			if (env->output <= env->sustain_level) {
+				env->output = env->sustain_level;
+				env->state = EnvSustain;
 			}
 			break;
-		case Sustain:
-			ret = (float)env->sustain / 100.0;
+		case EnvSustain:
 			break;
-		case Release:
-			if(ms_time > env->release) {
-				env->state = None;
-				env->time = 0;
-			} else if(env->release > 0) {
-				ret = (env->release - ms_time) * env->sustain / env->release / 100.0;
+		case EnvRelease:
+			env->output = env->release_base + env->output * env->release_coef;
+			if (env->output <= 0.0) {
+				env->output = 0.0;
+				env->state = EnvNone;
 			}
 			break;
 	}
 
-	env->time++;
-
-	return ret;
+	return env->output;
 }
