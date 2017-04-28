@@ -19,7 +19,7 @@ void synth_init(struct Synth *synth) {
 	synth->lfo_depth = 0.0;
 	sine_osc_init(&synth->lfo_osc);
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-		synth->voices[i].synth = synth;
+		voice_init(&synth->voices[i], synth);
 	}
 }
 
@@ -35,7 +35,7 @@ static void synth_set_pitch(struct Synth *synth) {
 	float lfo_detune = synth->lfo_depth * sine_osc_sample(&synth->lfo_osc);
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 		struct Voice *voice = &synth->voices[i];
-		if(voice->osc_env.state != None)
+		if(voice->osc_env.state != EnvNone)
 			oscillator_set_freq(&voice->osc, detune(midifreq(voice->note), voice->detune + synth->pitch_bend * synth->pitch_bend_range + lfo_detune));
 	}
 }
@@ -48,9 +48,9 @@ static void synth_spread_unison(struct Synth *synth) {
 	for(int i = 4; i < 7; i++) {
 		synth->voices[i].detune = (i - 7) * synth->unison_spread / 6.0;
 	}
-	for(int i = 0; i < 7; i++) {
-		printf("voice %d detune %f\n", i, synth->voices[i].detune);
-	}
+	// for(int i = 0; i < 7; i++) {
+	// 	printf("voice %d detune %f\n", i, synth->voices[i].detune);
+	// }
 }
 
 static void synth_spread_stereo(struct Synth *synth) {
@@ -58,9 +58,9 @@ static void synth_spread_stereo(struct Synth *synth) {
 	for(int i = 1; i <= 7; i++) {
 		synth->voices[i].pan = ((i&1) * 2 - 1) * synth->stereo_spread * ((i + 1) / 2) / 3;
 	}
-	for(int i = 0; i < 7; i++) {
-		printf("voice %d pan %f\n", i, synth->voices[i].pan);
-	}
+	// for(int i = 0; i < 7; i++) {
+	// 	printf("voice %d pan %f\n", i, synth->voices[i].pan);
+	// }
 }
 
 static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t velocity) {
@@ -71,17 +71,17 @@ static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t 
 		struct Voice *voice = synth->voices + i;
 		voice->osc.phase = random();
 
-		voice->osc_env.attack = synth->osc_env.attack;
-		voice->osc_env.decay = synth->osc_env.decay;
-		voice->osc_env.sustain = synth->osc_env.sustain;
-		voice->osc_env.release = synth->osc_env.release;
+		envelope_set_attack_rate(&voice->osc_env, synth->osc_attack);
+		envelope_set_decay_rate(&voice->osc_env, synth->osc_decay);
+		envelope_set_sustain_level(&voice->osc_env, synth->osc_sustain);
+		envelope_set_release_rate(&voice->osc_env, synth->osc_release);
 
-		voice->filter_env.attack = synth->filter_env.attack;
-		voice->filter_env.decay = synth->filter_env.decay;
-		voice->filter_env.sustain = synth->filter_env.sustain;
-		voice->filter_env.release = synth->filter_env.release;
+		envelope_set_attack_rate(&voice->filter_env, synth->filter_attack);
+		envelope_set_decay_rate(&voice->filter_env, synth->filter_decay);
+		envelope_set_sustain_level(&voice->filter_env, synth->filter_sustain);
+		envelope_set_release_rate(&voice->filter_env, synth->filter_release);
 
-		voice_note_start(voice, note, i == 0 ? velocity : velocity / 4);
+		voice_note_start(voice, note, velocity);
 	}
 }
 
@@ -100,7 +100,7 @@ void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity) {
 		uint32_t oldest_time = 0;
 		for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 			struct Voice *voice = &synth->voices[i];
-			if(voice->osc_env.state == None) {
+			if(voice->osc_env.state == EnvNone) {
 				found = voice;
 				break;
 			}
@@ -109,15 +109,16 @@ void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity) {
 				found = voice;
 			}
 		}
-		found->osc_env.attack = synth->osc_env.attack;
-		found->osc_env.decay = synth->osc_env.decay;
-		found->osc_env.sustain = synth->osc_env.sustain;
-		found->osc_env.release = synth->osc_env.release;
 
-		found->filter_env.attack = synth->filter_env.attack;
-		found->filter_env.decay = synth->filter_env.decay;
-		found->filter_env.sustain = synth->filter_env.sustain;
-		found->filter_env.release = synth->filter_env.release;
+		envelope_set_attack_rate(&found->osc_env, synth->osc_attack);
+		envelope_set_decay_rate(&found->osc_env, synth->osc_decay);
+		envelope_set_sustain_level(&found->osc_env, synth->osc_sustain);
+		envelope_set_release_rate(&found->osc_env, synth->osc_release);
+
+		envelope_set_attack_rate(&found->filter_env, synth->filter_attack);
+		envelope_set_decay_rate(&found->filter_env, synth->filter_decay);
+		envelope_set_sustain_level(&found->filter_env, synth->filter_sustain);
+		envelope_set_release_rate(&found->filter_env, synth->filter_release);
 
 		voice_note_start(found, note, velocity);
 	}
@@ -141,7 +142,7 @@ void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
 	} else {
 		for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 			struct Voice *voice = synth->voices + i;
-			if(voice->note == note && voice->osc_env.state != None && voice->osc_env.state != Release) {
+			if(voice->note == note && voice->osc_env.state != EnvNone && voice->osc_env.state != EnvRelease) {
 				voice_stop(&synth->voices[i]);
 			}
 		}
@@ -155,7 +156,7 @@ void synth_render_sample(struct Synth *synth, float *out) {
 
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 		struct Voice *v = &synth->voices[i];
-		if(v->osc_env.state == None) continue;
+		if(v->osc_env.state == EnvNone) continue;
 
 		float vsmpl[2];
 		voice_render_sample(v, vsmpl);
@@ -222,23 +223,21 @@ void synth_load_patch(struct Synth *s, const char *filename) {
 				if(!strcmp(tok, "lfo_freq")) {
 					sine_osc_set_freq(&s->lfo_osc, strtof(val, NULL));
 				} else if(!strcmp(tok, "osc_env.attack")) {
-					s->osc_env.attack = strtof(val, NULL);
+					s->osc_attack = strtof(val, NULL);
 				} else if(!strcmp(tok, "osc_env.decay")) {
-					s->osc_env.decay = strtof(val, NULL);
+					s->osc_decay = strtof(val, NULL);
 				} else if(!strcmp(tok, "osc_env.sustain")) {
-					s->osc_env.sustain = strtof(val, NULL);
+					s->osc_sustain = strtof(val, NULL);
 				} else if(!strcmp(tok, "osc_env.release")) {
-					s->osc_env.release = strtof(val, NULL);
+					s->osc_release = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_env.attack")) {
-					printf("filter_env.attack %f\n", strtof(val, NULL));
-					s->filter_env.attack = strtof(val, NULL);
+					s->filter_attack = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_env.decay")) {
-					printf("filter_env.decay %f\n", strtof(val, NULL));
-					s->filter_env.decay = strtof(val, NULL);
+					s->filter_decay = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_env.sustain")) {
-					s->filter_env.sustain = strtof(val, NULL);
+					s->filter_sustain = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_env.release")) {
-					s->filter_env.release = strtof(val, NULL);
+					s->filter_release = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_eg_intensity")) {
 					s->filter_eg_intensity  = strtof(val, NULL);
 				} else if(!strcmp(tok, "filter_kbd_track")) {

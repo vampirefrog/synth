@@ -1,5 +1,11 @@
 #include "synth.h"
 
+void voice_init(struct Voice *v, struct Synth *synth) {
+	v->synth = synth;
+	envelope_init(&v->osc_env);
+	envelope_init(&v->filter_env);
+}
+
 void voice_render_sample(struct Voice *v, float *out) {
 	//if(v->osc_env.state == None) return;
 	float amplitude = envelope_sample(&v->osc_env); // calculate based on key velocity and envelope

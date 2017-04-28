@@ -19,7 +19,8 @@ struct Key {
 
 struct Synth {
 	struct Voice voices[SYNTH_NUM_VOICES];
-	struct Envelope osc_env, filter_env;
+	float osc_attack, osc_decay, osc_sustain, osc_release;
+	float filter_attack, filter_decay, filter_sustain, filter_release;
 	float unison_spread;
 	float stereo_spread;
 	uint8_t monophonic;
@@ -29,8 +30,8 @@ struct Synth {
 	float cutoff, filter_eg_intensity, filter_kbd_track, lfo_freq;
 
 	// private
-	struct Key key_stack[SYNTH_NUM_VOICES];
 	struct SineOsc lfo_osc;
+	struct Key key_stack[SYNTH_NUM_VOICES];
 	uint8_t key_stack_size;
 	float volume, pitch_bend, lfo_depth;
 	uint32_t time;

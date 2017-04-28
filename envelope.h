@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+// Code converted to C from http://www.earlevel.com/main/2013/06/01/envelope-generators/
+
 struct Envelope {
 	// private
 	enum {
