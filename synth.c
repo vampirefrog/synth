@@ -156,7 +156,6 @@ void synth_render_sample(struct Synth *synth, float *out) {
 
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
 		struct Voice *v = &synth->voices[i];
-		if(v->osc_env.state == EnvNone) continue;
 
 		float vsmpl[2];
 		voice_render_sample(v, vsmpl);

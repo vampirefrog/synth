@@ -7,7 +7,6 @@ void voice_init(struct Voice *v, struct Synth *synth) {
 }
 
 void voice_render_sample(struct Voice *v, float *out) {
-	//if(v->osc_env.state == None) return;
 	float amplitude = envelope_sample(&v->osc_env); // calculate based on key velocity and envelope
 	float cutoff = envelope_sample(&v->filter_env);
 
