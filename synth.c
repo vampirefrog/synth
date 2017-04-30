@@ -134,7 +134,16 @@ static void synth_note_off_monophonic(struct Synth *synth) {
 void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
 	if(synth->monophonic) {
 		if(synth->key_stack_size > 1) {
-			synth_note_on_monophonic(synth, synth->key_stack[synth->key_stack_size - 2].note, synth->key_stack[synth->key_stack_size - 2].velocity);
+			if(synth->key_stack[synth->key_stack_size - 1].note == note) {
+				synth_note_on_monophonic(synth, synth->key_stack[synth->key_stack_size - 2].note, synth->key_stack[synth->key_stack_size - 2].velocity);
+			} else {
+				for(int i = 0; i < synth->key_stack_size - 1; i++) {
+					if(synth->key_stack[i].note == note) {
+						memmove(synth->key_stack + i, synth->key_stack + i + 1, sizeof(synth->key_stack[0]) * (synth->key_stack_size - i - 1));
+						break;
+					}
+				}
+			}
 		} else {
 			synth_note_off_monophonic(synth);
 		}

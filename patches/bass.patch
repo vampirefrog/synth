@@ -4,7 +4,7 @@ osc_env.decay 0
 osc_env.sustain .4
 osc_env.release 0
 filter_env.attack 100
-filter_env.decay 40000
+filter_env.decay 50000
 filter_env.sustain 0
 filter_env.release 100
 filter_eg_intensity 1

@@ -11,7 +11,6 @@ void envelope_init(struct Envelope *env) {
 	envelope_set_sustain_level(env, 1.0);
 	envelope_set_target_ratio_a(env, 0.3);
 	envelope_set_target_ratio_dr(env, 0.0001);
-	printf("envelope_init()\n");
 }
 
 void envelope_reset(struct Envelope *env) {
