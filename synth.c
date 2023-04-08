@@ -63,7 +63,7 @@ static void synth_spread_stereo(struct Synth *synth) {
 	// }
 }
 
-static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t velocity) {
+static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, float velocity) {
 	synth_spread_unison(synth);
 	synth_spread_stereo(synth);
 
@@ -85,7 +85,7 @@ static void synth_note_on_monophonic(struct Synth *synth, uint8_t note, uint8_t 
 	}
 }
 
-void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity) {
+void synth_note_on(struct Synth *synth, uint8_t note, float velocity) {
 	if(synth->monophonic) {
 		synth->key_stack[synth->key_stack_size].note = note;
 		synth->key_stack[synth->key_stack_size].velocity = velocity;
@@ -131,7 +131,7 @@ static void synth_note_off_monophonic(struct Synth *synth) {
 	}
 }
 
-void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
+void synth_note_off(struct Synth *synth, uint8_t note, float velocity) {
 	if(synth->monophonic) {
 		if(synth->key_stack_size > 1) {
 			if(synth->key_stack[synth->key_stack_size - 1].note == note) {
@@ -180,39 +180,94 @@ void synth_render_sample(struct Synth *synth, float *out) {
 	synth->time++;
 }
 
-void synth_set_cutoff_freq(struct Synth *synth, uint8_t f) {
-	synth->cutoff = f / 127.0;
+void synth_set_cutoff_freq(struct Synth *synth, float f) {
+	synth->cutoff = f;
 }
 
-void synth_set_resonance(struct Synth *synth, uint8_t f) {
+void synth_set_resonance(struct Synth *synth, float f) {
 	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-		filter_set_resonance(&synth->voices[i].filter, f / 127.0);
+		filter_set_resonance(&synth->voices[i].filter, f);
 	}
 }
 
-void synth_set_unison_spread(struct Synth *synth, uint8_t w) {
-	synth->unison_spread = w / 127.0;
+void synth_set_unison_spread(struct Synth *synth, float w) {
+	synth->unison_spread = w;
 	synth_spread_unison(synth);
 }
 
-void synth_set_stereo_spread(struct Synth *synth, uint8_t w) {
-	synth->stereo_spread = w / 127.0;
+void synth_set_stereo_spread(struct Synth *synth, float w) {
+	synth->stereo_spread = w;
 	synth_spread_stereo(synth);
 }
 
-void synth_set_volume(struct Synth *s, uint8_t vol) {
-	s->volume = vol / 127.0;
+void synth_set_volume(struct Synth *s, float vol) {
+	s->volume = vol;
+	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
+		s->voices[i].volume = vol;
+	}
 }
 
-void synth_pitch_bend(struct Synth *s, int16_t bend) {
-	s->pitch_bend = bend / 8191.0;
+void synth_pitch_bend(struct Synth *s, float bend) {
+	s->pitch_bend = bend;
 	if(s->pitch_bend < -1.0) s->pitch_bend = -1.0;
 	if(s->pitch_bend > 1.0) s->pitch_bend = 1.0;
 	synth_set_pitch(s);
 }
 
-void synth_set_lfo_depth(struct Synth *s, uint8_t mod) {
-	s->lfo_depth = mod / 127.0;
+void synth_set_lfo_depth(struct Synth *s, float depth) {
+	s->lfo_depth = depth;
+}
+
+void synth_set_lfo_freq(struct Synth *s, float value) {
+	sine_osc_set_freq(&s->lfo_osc, value);
+}
+
+void synth_set_osc_attack(struct Synth *s, float value) {
+	s->osc_attack = value;
+}
+
+void synth_set_osc_decay(struct Synth *s, float value) {
+	s->osc_decay = value;
+}
+
+void synth_set_osc_sustain(struct Synth *s, float value) {
+	s->osc_sustain = value;
+}
+
+void synth_set_osc_release(struct Synth *s, float value) {
+	s->osc_release = value;
+}
+
+void synth_set_filter_attack(struct Synth *s, float value) {
+	s->filter_attack = value;
+}
+
+void synth_set_filter_decay(struct Synth *s, float value) {
+	s->filter_decay = value;
+}
+
+void synth_set_filter_sustain(struct Synth *s, float value) {
+	s->filter_sustain = value;
+}
+
+void synth_set_filter_release(struct Synth *s, float value) {
+	s->filter_release = value;
+}
+
+void synth_set_filter_eg_intensity(struct Synth *s, float value) {
+	s->filter_eg_intensity = value;
+}
+
+void synth_set_filter_kbd_track(struct Synth *s, float value) {
+	s->filter_kbd_track = value;
+}
+
+void synth_set_pitch_bend_range(struct Synth *s, float value) {
+	s->pitch_bend_range = value;
+}
+
+void synth_set_monophonic(struct Synth *s, int value) {
+	s->monophonic = value;
 }
 
 void synth_load_patch(struct Synth *s, const char *filename) {
@@ -229,41 +284,39 @@ void synth_load_patch(struct Synth *s, const char *filename) {
 			char *val = strtok(NULL, " \t");
 			if(val) {
 				if(!strcmp(tok, "lfo_freq")) {
-					sine_osc_set_freq(&s->lfo_osc, strtof(val, NULL));
+					synth_set_lfo_freq(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "osc_env.attack")) {
-					s->osc_attack = strtof(val, NULL);
+					synth_set_osc_attack(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "osc_env.decay")) {
-					s->osc_decay = strtof(val, NULL);
+					synth_set_osc_decay(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "osc_env.sustain")) {
-					s->osc_sustain = strtof(val, NULL);
+					synth_set_osc_sustain(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "osc_env.release")) {
-					s->osc_release = strtof(val, NULL);
+					synth_set_osc_release(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_env.attack")) {
-					s->filter_attack = strtof(val, NULL);
+					synth_set_filter_attack(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_env.decay")) {
-					s->filter_decay = strtof(val, NULL);
+					synth_set_filter_decay(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_env.sustain")) {
-					s->filter_sustain = strtof(val, NULL);
+					synth_set_filter_sustain(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_env.release")) {
-					s->filter_release = strtof(val, NULL);
+					synth_set_filter_release(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_eg_intensity")) {
-					s->filter_eg_intensity  = strtof(val, NULL);
+					synth_set_filter_eg_intensity(s,  strtof(val, NULL));
 				} else if(!strcmp(tok, "filter_kbd_track")) {
-					s->filter_kbd_track = strtof(val, NULL);
+					synth_set_filter_kbd_track(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "pitch_bend_range")) {
-					s->pitch_bend_range = strtof(val, NULL);
+					synth_set_pitch_bend_range(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "monophonic")) {
-					s->monophonic = atoi(val);
+					synth_set_monophonic(s, atoi(val));
 				} else if(!strcmp(tok, "unison_spread")) {
-					s->unison_spread = strtof(val, NULL);
+					synth_set_unison_spread(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "stereo_spread")) {
-					s->stereo_spread = strtof(val, NULL);
+					synth_set_stereo_spread(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "cutoff")) {
-					s->cutoff = strtof(val, NULL);
+					synth_set_cutoff_freq(s, strtof(val, NULL));
 				} else if(!strcmp(tok, "resonance")) {
-					for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-						filter_set_resonance(&s->voices[i].filter, strtof(val, NULL));
-					}
+					synth_set_resonance(s, strtof(val, NULL));
 				}
 			}
 		}

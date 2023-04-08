@@ -14,7 +14,8 @@ typedef uint32_t fixed;
 #include "sineosc.h"
 
 struct Key {
-	uint8_t note, velocity;
+	uint8_t note;
+	float velocity;
 };
 
 struct Synth {
@@ -39,16 +40,27 @@ struct Synth {
 
 void synth_init(struct Synth *synth);
 void synth_load_patch(struct Synth *synth, const char *filename);
-void synth_note_on(struct Synth *synth, uint8_t note, uint8_t velocity);
-void synth_note_off(struct Synth *synth, uint8_t note, uint8_t velocity);
+void synth_note_on(struct Synth *synth, uint8_t note, float velocity);
+void synth_note_off(struct Synth *synth, uint8_t note, float velocity);
 void synth_render_sample(struct Synth *synth, float *out);
-void synth_set_pulse_width(struct Synth *s, uint8_t width);
-void synth_set_unison_spread(struct Synth *s, uint8_t spread);
-void synth_set_stereo_spread(struct Synth *s, uint8_t spread);
-void synth_set_cutoff_freq(struct Synth *s, uint8_t freq);
-void synth_set_resonance(struct Synth *s, uint8_t res);
-void synth_set_volume(struct Synth *s, uint8_t vol);
-void synth_pitch_bend(struct Synth *s, int16_t bend);
-void synth_set_lfo_depth(struct Synth *s, uint8_t mod);
+void synth_set_unison_spread(struct Synth *s, float spread);
+void synth_set_stereo_spread(struct Synth *s, float spread);
+void synth_set_cutoff_freq(struct Synth *s, float freq);
+void synth_set_resonance(struct Synth *s, float res);
+void synth_set_volume(struct Synth *s, float vol);
+void synth_pitch_bend(struct Synth *s, float bend);
+void synth_set_lfo_depth(struct Synth *s, float value);
+void synth_set_osc_attack(struct Synth *s, float value);
+void synth_set_osc_decay(struct Synth *s, float value);
+void synth_set_osc_sustain(struct Synth *s, float value);
+void synth_set_osc_release(struct Synth *s, float value);
+void synth_set_filter_attack(struct Synth *s, float value);
+void synth_set_filter_decay(struct Synth *s, float value);
+void synth_set_filter_sustain(struct Synth *s, float value);
+void synth_set_filter_release(struct Synth *s, float value);
+void synth_set_filter_eg_intensity(struct Synth *s, float value);
+void synth_set_filter_kbd_track(struct Synth *s, float value);
+void synth_set_pitch_bend_range(struct Synth *s, float value);
+void synth_set_monophonic(struct Synth *s, int value);
 
 #endif /* SYNTH_H_ */

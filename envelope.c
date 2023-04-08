@@ -76,14 +76,14 @@ float envelope_sample(struct Envelope *env) {
 	switch(env->state) {
 		case EnvAttack:
 			env->output = env->attack_base + env->output * env->attack_coef;
-			if (env->output >= 1.0) {
+			if(env->output >= 1.0) {
 				env->output = 1.0;
 				env->state = EnvDecay;
 			}
 			break;
 		case EnvDecay:
 			env->output = env->decay_base + env->output * env->decay_coef;
-			if (env->output <= env->sustain_level) {
+			if(env->output <= env->sustain_level) {
 				env->output = env->sustain_level;
 				env->state = EnvSustain;
 			}
@@ -92,7 +92,7 @@ float envelope_sample(struct Envelope *env) {
 			break;
 		case EnvRelease:
 			env->output = env->release_base + env->output * env->release_coef;
-			if (env->output <= 0.0) {
+			if(env->output <= 0.0) {
 				env->output = 0.0;
 				env->state = EnvNone;
 			}
