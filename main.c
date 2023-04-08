@@ -24,9 +24,11 @@
 
 #include <jack/jack.h>
 
-#include <asoundlib.h>
+#include <alsa/asoundlib.h>
 
 #include "synth.h"
+#include "midi.h"
+
 struct Synth synth;
 
 typedef jack_default_audio_sample_t sample_t;
@@ -37,10 +39,10 @@ jack_port_t *output_ports[2];
 unsigned long sr;
 int verbose = 0;
 
-int process (jack_nframes_t nframes, void *arg) {
+int process(jack_nframes_t nframes, void *arg) {
 	sample_t *buffers[2];
-	buffers[0] = (sample_t *) jack_port_get_buffer (output_ports[0], nframes);
-	buffers[1] = (sample_t *) jack_port_get_buffer (output_ports[1], nframes);
+	buffers[0] = (sample_t *) jack_port_get_buffer(output_ports[0], nframes);
+	buffers[1] = (sample_t *) jack_port_get_buffer(output_ports[1], nframes);
 	for(int i = 0; i < nframes; i++) {
 		float out[2] = {0, 0};
 		synth_render_sample(&synth, out);
@@ -147,44 +149,20 @@ void midi_action(snd_seq_t *seq_handle) {
 			case SND_SEQ_EVENT_NOTEON:
 				if(verbose)
 					printf("Note on %s (%d) %d\n", midi_note_name(ev->data.note.note), ev->data.note.note, ev->data.note.velocity);
-				synth_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
+				synth_midi_note_on(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_NOTEOFF:
 				if(verbose)
 					printf("Note off %s (%d) %d\n", midi_note_name(ev->data.note.note), ev->data.note.note, ev->data.note.velocity);
-				synth_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
+				synth_midi_note_off(&synth, ev->data.note.note, ev->data.note.velocity);
 				break;
 			case SND_SEQ_EVENT_PITCHBEND:
-				synth_pitch_bend(&synth, ev->data.control.value);
+				synth_midi_pitch_bend(&synth, ev->data.control.value);
 				break;
 			case SND_SEQ_EVENT_CONTROLLER:
 				if(verbose)
 					printf("CC 0x%02x (%s) %d\n", ev->data.control.param, midi_cc_name(ev->data.control.param), ev->data.control.value);
-				if(ev->data.control.param == 0x01) {
-					if(verbose)
-						printf("LFO Depth %d\n", ev->data.control.value);
-					synth_set_lfo_depth(&synth, ev->data.control.value);
-				} else if(ev->data.control.param == 7) {
-					if(verbose)
-						printf("Volume %d\n", ev->data.control.value);
-					synth_set_volume(&synth, ev->data.control.value);
-				} else if(ev->data.control.param == 91) {
-					if(verbose)
-						printf("Unison spread %d\n", ev->data.control.value);
-					synth_set_unison_spread(&synth, ev->data.control.value);
-				} else if(ev->data.control.param == 93) {
-					if(verbose)
-						printf("Stereo spread %d\n", ev->data.control.value);
-					synth_set_stereo_spread(&synth, ev->data.control.value);
-				} else if(ev->data.control.param == 74) {
-					if(verbose)
-						printf("Cutoff %d\n", ev->data.control.value);
-					synth_set_cutoff_freq(&synth, ev->data.control.value);
-				} else if(ev->data.control.param == 71) {
-					if(verbose)
-						printf("Resonance %d\n", ev->data.control.value);
-					synth_set_resonance(&synth, ev->data.control.value);
-				}
+				synth_midi_cc(&synth, ev->data.control.param, ev->data.control.value);
 				break;
 		}
 		snd_seq_free_event(ev);
@@ -207,42 +185,64 @@ int main(int argc, char **argv) {
 		{0, 0, 0, 0}
 	};
 
-	while ((opt = getopt_long (argc, argv, options, long_options, &option_index)) != EOF) {
-		switch (opt) {
-		case 'n':
-			client_name = (char *) malloc (strlen (optarg) * sizeof (char));
-			strcpy (client_name, optarg);
-			break;
-		case 'p':
-			input_seq_addr = optarg;
-			break;
-		case 'v':
-			verbose = 1;
-			break;
-		default:
-			fprintf (stderr, "Unknown option %c\n", opt);
-		case 'h':
-			fprintf(stderr, "usage: %s [options]\n"
-				"\t-p, --port <port name>   Input port for sequencer events (MIDI keyboard)\n"
-				"\t-n, --name <name>.       Jack client name. Default: " CLIENT_NAME " ]\n"
-				"\t-v    Verbose\n"
-				"\t-h    Help\n",
-				argv[0]
-			);
-			return -1;
+	while((opt = getopt_long (argc, argv, options, long_options, &option_index)) != EOF) {
+		switch(opt) {
+			case 'n':
+				client_name = (char *) malloc(strlen (optarg) * sizeof (char));
+				strcpy (client_name, optarg);
+				break;
+			case 'p':
+				input_seq_addr = optarg;
+				break;
+			case 'v':
+				verbose = 1;
+				break;
+			default:
+				fprintf (stderr, "Unknown option %c\n", opt);
+			case 'h':
+				fprintf(
+					stderr,
+					"usage: %s [options]\n"
+					"\t-p, --port <port name>   Input port for sequencer events (MIDI keyboard)\n"
+					"\t-n, --name <name>.       Jack client name. Default: " CLIENT_NAME " ]\n"
+					"\t-v    Verbose\n"
+					"\t-h    Help\n",
+					argv[0]
+				);
+				return -1;
 		}
 	}
 
-	/* Initial Jack setup, get sample rate */
-	if ((client = jack_client_open (client_name, JackNoStartServer, &status)) == 0) {
-		fprintf (stderr, "jack server not running?\n");
+	client = jack_client_open(client_name, JackNullOption, &status, NULL);
+	if(client == NULL) {
+		fprintf (stderr, "jack_client_open() failed, status = 0x%2.0x\n", status);
+		if(status & JackServerFailed) {
+			fprintf (stderr, "Unable to connect to JACK server\n");
+		}
 		return 1;
 	}
+	if(status & JackServerStarted) {
+		fprintf(stderr, "JACK server started\n");
+	}
+	if(status & JackNameNotUnique) {
+		client_name = jack_get_client_name(client);
+		fprintf(stderr, "unique name `%s' assigned\n", client_name);
+	}
+
 	jack_set_process_callback(client, process, 0);
 	output_ports[0] = jack_port_register(client, "Synth Out L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	if(!output_ports[0]) {
+		fprintf(stderr, "Could not register Synth Out L port\n");
+		return 1;
+	}
 	output_ports[1] = jack_port_register(client, "Synth Out R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	if(!output_ports[1]) {
+		fprintf(stderr, "Could not register Synth Out R port\n");
+		return 1;
+	}
 
 	sr = jack_get_sample_rate(client);
+	printf("Sample rate: %d\n", sr);
 
 	synth_init(&synth);
 
@@ -256,33 +256,42 @@ int main(int argc, char **argv) {
 	}
 
 	const char **ports;
-	ports = jack_get_ports (client, NULL, NULL, JackPortIsPhysical|JackPortIsInput);
-	if (ports == NULL) {
+	ports = jack_get_ports(client, NULL, NULL, JackPortIsPhysical|JackPortIsInput);
+	if(ports == NULL) {
 		fprintf(stderr, "no physical capture ports\n");
 		exit (1);
 	}
 
-	if (jack_connect (client, jack_port_name (output_ports[0]), ports[0])) {
-		fprintf (stderr, "cannot connect input ports\n");
+	if(jack_connect(client, jack_port_name(output_ports[0]), ports[0])) {
+		fprintf(stderr, "cannot connect input ports\n");
 	}
 
-	if (jack_connect (client, jack_port_name (output_ports[1]), ports[1])) {
-		fprintf (stderr, "cannot connect input ports\n");
+	if(jack_connect(client, jack_port_name(output_ports[1]), ports[1])) {
+		fprintf(stderr, "cannot connect input ports\n");
 	}
+
+	free(ports);
 
 	snd_seq_t *seq_handle;
 	int npfd;
 	struct pollfd *pfd;
 	int portid;
 
-	if (snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0) < 0) {
+	if(snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0) < 0) {
 		fprintf(stderr, "Error opening ALSA sequencer.\n");
 		exit(1);
 	}
 	snd_seq_set_client_name(seq_handle, client_name);
-	if ((portid = snd_seq_create_simple_port(seq_handle, "Cornhole",
-						SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE,
-						SND_SEQ_PORT_TYPE_APPLICATION)) < 0) {
+	if(
+		(
+			portid = snd_seq_create_simple_port(
+				seq_handle,
+				"Cornhole",
+				SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
+				SND_SEQ_PORT_TYPE_APPLICATION
+			)
+		) < 0
+	) {
 		fprintf(stderr, "Error creating sequencer port.\n");
 		exit(1);
 	}
@@ -300,7 +309,7 @@ int main(int argc, char **argv) {
 	npfd = snd_seq_poll_descriptors_count(seq_handle, POLLIN);
 	pfd = (struct pollfd *)alloca(npfd * sizeof(struct pollfd));
 	snd_seq_poll_descriptors(seq_handle, pfd, npfd, POLLIN);
-	while (1) {
+	while(1) {
 		if (poll(pfd, npfd, 100000) > 0) {
 			midi_action(seq_handle);
 		}
