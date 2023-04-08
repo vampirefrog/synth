@@ -169,7 +169,7 @@ void synth_render_sample(struct Synth *synth, float *out) {
 		float vsmpl[2];
 		voice_render_sample(v, vsmpl);
 		for(int j = 0; j < 2; j++) {
-			smpl[j] += vsmpl[j];
+			smpl[j] += vsmpl[j] * synth->volume;
 			if(smpl[j] > 1) smpl[j] = 1;
 			else if(smpl[j] < -1) smpl[j] = -1;
 		}
@@ -202,9 +202,6 @@ void synth_set_stereo_spread(struct Synth *synth, float w) {
 
 void synth_set_volume(struct Synth *s, float vol) {
 	s->volume = vol;
-	for(int i = 0; i < SYNTH_NUM_VOICES; i++) {
-		s->voices[i].volume = vol;
-	}
 }
 
 void synth_pitch_bend(struct Synth *s, float bend) {
