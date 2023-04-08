@@ -22,7 +22,7 @@ struct Voice {
 };
 
 void voice_init(struct Voice *voice, struct Synth *synth);
-void voice_note_start(struct Voice *voice, uint8_t note, uint8_t velocity);
+void voice_note_start(struct Voice *voice, uint8_t note, float velocity);
 void voice_stop(struct Voice *voice);
 void voice_render_sample(struct Voice *voice, float *out);
 

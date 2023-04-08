@@ -18,8 +18,8 @@ void voice_render_sample(struct Voice *v, float *out) {
 	v->time++;
 }
 
-void voice_note_start(struct Voice *voice, uint8_t note, uint8_t velocity) {
-	voice->volume = (1+velocity) / 128.0; // in the range (0, 1]
+void voice_note_start(struct Voice *voice, uint8_t note, float velocity) {
+	voice->volume = velocity; // in the range (0, 1]
 
 	envelope_start(&voice->osc_env);
 	envelope_start(&voice->filter_env);
