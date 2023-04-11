@@ -1,0 +1,59 @@
+OBJS=synth.o sineosc.o oscillator.o midi.o filter.o envelope.o voice.o vampiSynthWorkletGlue.o
+EXPORTED_FUNCTIONS=[\
+"_synth_init", \
+"_synth_note_on", \
+"_synth_note_off", \
+"_synth_render_sample", \
+"_synth_render_buffer", \
+"_synth_set_unison_spread", \
+"_synth_set_stereo_spread", \
+"_synth_set_cutoff_freq", \
+"_synth_set_resonance", \
+"_synth_set_volume", \
+"_synth_pitch_bend", \
+"_synth_set_lfo_depth", \
+"_synth_set_lfo_freq", \
+"_synth_set_osc_attack", \
+"_synth_set_osc_decay", \
+"_synth_set_osc_sustain", \
+"_synth_set_osc_release", \
+"_synth_set_filter_attack", \
+"_synth_set_filter_decay", \
+"_synth_set_filter_sustain", \
+"_synth_set_filter_release", \
+"_synth_set_filter_eg_intensity", \
+"_synth_set_filter_kbd_track", \
+"_synth_set_pitch_bend_range", \
+"_synth_set_monophonic", \
+"_synth_midi_note_on", \
+"_synth_midi_note_off", \
+"_synth_midi_pitch_bend", \
+"_synth_midi_cc", \
+"_synth", \
+"_synthbuf" \
+]
+CFLAGS=-Wall
+LDFLAGS=-s EXPORTED_FUNCTIONS='$(EXPORTED_FUNCTIONS)' -sASSERTIONS=1 -lm
+EMCC=emcc
+EMPP=em++
+
+all: vampiSynthWorklet.js vampiSynthAsm.js
+
+vampiSynthWorklet.js: vampiSynth.wasm vampiSynthWorklet.js.template
+	> $@
+	echo 'const wasm = new Uint8Array([' >> $@
+	cat $1 | xxd -c 32 -i | sed -e 's/, /,/g' >> $@
+	echo ']);' >> $@
+	cat $2 >> $@
+
+vampiSynth.wasm: $(OBJS)
+	$(EMCC) $^ -s WASM=1 -s IGNORE_MISSING_MAIN=1 $(LDFLAGS) -o vampiSynth.js
+
+vampiSynthAsm.js: $(OBJS)
+	$(EMCC) $^ -s WASM=0 -s IGNORE_MISSING_MAIN=1 $(LDFLAGS) -o vampiSynthAsm.js
+
+%.o: %.c
+	$(EMCC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f *.js *.wasm *.o
