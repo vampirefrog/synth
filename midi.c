@@ -12,7 +12,7 @@ void synth_midi_note_off(struct Synth *synth, uint8_t note, uint8_t velocity) {
 }
 
 void synth_midi_pitch_bend(struct Synth *synth, int16_t value) {
-	synth_pitch_bend(synth, value / 8191.0);
+	synth_pitch_bend(synth, (value - 8192) / 8191.0);
 }
 
 void synth_midi_cc(struct Synth *synth, uint8_t param, uint8_t value) {
