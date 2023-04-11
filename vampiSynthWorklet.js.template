@@ -1,0 +1,95 @@
+class VampiSynthProcessor extends AudioWorkletProcessor {
+	constructor(options) {
+		super(options);
+
+		this.port.onmessage = e => {
+			switch(e.data.type) {
+				case 'noteOn':
+					this.obj.instance.exports.synth_midi_note_on(this.synthPtr, e.data.note, e.data.velocity);
+					break;
+				case 'noteOff':
+					this.obj.instance.exports.synth_midi_note_off(this.synthPtr, e.data.note, 0);
+					break;
+				case 'pitchBend':
+					this.obj.instance.exports.synth_midi_pitch_bend(this.synthPtr, e.data.value);
+					break;
+				case 'cc':
+					this.obj.instance.exports.synth_midi_cc(this.synthPtr, e.data.param, e.data.value);
+					break;
+				case 'loadPatch':
+					this.obj.instance.exports.synth_set_lfo_freq(this.synthPtr, e.data.lfo_freq);
+					this.obj.instance.exports.synth_set_osc_attack(this.synthPtr, e.data.osc_attack);
+					this.obj.instance.exports.synth_set_osc_decay(this.synthPtr, e.data.osc_decay);
+					this.obj.instance.exports.synth_set_osc_sustain(this.synthPtr, e.data.osc_sustain);
+					this.obj.instance.exports.synth_set_osc_release(this.synthPtr, e.data.osc_release);
+					this.obj.instance.exports.synth_set_filter_attack(this.synthPtr, e.data.filter_attack);
+					this.obj.instance.exports.synth_set_filter_decay(this.synthPtr, e.data.filter_decay);
+					this.obj.instance.exports.synth_set_filter_sustain(this.synthPtr, e.data.filter_sustain);
+					this.obj.instance.exports.synth_set_filter_release(this.synthPtr, e.data.filter_release);
+					this.obj.instance.exports.synth_set_filter_eg_intensity(this.synthPtr, e.data.filter_eg_intensity);
+					this.obj.instance.exports.synth_set_filter_kbd_track(this.synthPtr, e.data.filter_kbd_track);
+					this.obj.instance.exports.synth_set_pitch_bend_range(this.synthPtr, e.data.pitch_bend_range);
+					this.obj.instance.exports.synth_set_monophonic(this.synthPtr, e.data.monophonic);
+					this.obj.instance.exports.synth_set_unison_spread(this.synthPtr, e.data.unison_spread);
+					this.obj.instance.exports.synth_set_stereo_spread(this.synthPtr, e.data.stereo_spread);
+					this.obj.instance.exports.synth_set_cutoff_freq(this.synthPtr, e.data.cutoff_freq);
+					this.obj.instance.exports.synth_set_resonance(this.synthPtr, e.data.resonance);
+					break;
+			}
+		};
+
+		const importObject = {
+			env: {
+				emscripten_memcpy_big: function() {console.log('memcpy');},
+				emscripten_resize_heap: function() {console.log('resize heap');},
+				srandom: function() { console.log('srandom'); },
+				memmove: function() { console.log('srandom'); },
+			},
+		};
+
+		this.obj = null;
+		this.synthBuf = null;
+		this.synthPtr = null;
+		WebAssembly.instantiate(wasm.buffer, importObject).then(obj => {
+			this.obj = obj;
+			this.synthPtr = obj.instance.exports.synth.value;
+			obj.instance.exports.synth_init(this.synthPtr);
+			this.synthBuf = new Float32Array(obj.instance.exports.memory.buffer, obj.instance.exports.synthbuf.value);
+			this.mem32 = new Uint32Array(obj.instance.exports.memory.buffer, 1024 * 1024 * 16);
+
+			obj.instance.exports.synth_set_lfo_freq(this.synthPtr, 6);
+			obj.instance.exports.synth_set_osc_attack(this.synthPtr, 10000);
+			obj.instance.exports.synth_set_osc_decay(this.synthPtr, 5000);
+			obj.instance.exports.synth_set_osc_sustain(this.synthPtr,.7);
+			obj.instance.exports.synth_set_osc_release(this.synthPtr, 5000);
+			obj.instance.exports.synth_set_filter_attack(this.synthPtr, 0);
+			obj.instance.exports.synth_set_filter_decay(this.synthPtr, 0);
+			obj.instance.exports.synth_set_filter_sustain(this.synthPtr, 0);
+			obj.instance.exports.synth_set_filter_release(this.synthPtr, 0);
+			obj.instance.exports.synth_set_filter_eg_intensity(this.synthPtr, 0);
+			obj.instance.exports.synth_set_filter_kbd_track(this.synthPtr,.5);
+			obj.instance.exports.synth_set_pitch_bend_range(this.synthPtr, 2);
+			obj.instance.exports.synth_set_monophonic(this.synthPtr, 0);
+			obj.instance.exports.synth_set_unison_spread(this.synthPtr, 0);
+			obj.instance.exports.synth_set_stereo_spread(this.synthPtr, 0);
+			obj.instance.exports.synth_set_cutoff_freq(this.synthPtr, 1);
+			obj.instance.exports.synth_set_resonance(this.synthPtr, 0);
+
+			this.port.postMessage({ initialized: true });
+		});
+	}
+
+	process(inputs, outputs) {
+		if(!this.obj) return true;
+
+		this.obj.instance.exports.synth_render_buffer(this.synthPtr, this.obj.instance.exports.synthbuf.value, 128);
+		for(let i = 0, j = 0; i < 128; i++) {
+			outputs[0][0][i] = this.synthBuf[j++];
+			outputs[0][1][i] = this.synthBuf[j++];
+		}
+
+		return true;
+	}
+}
+
+registerProcessor('vampi-synth', VampiSynthProcessor);

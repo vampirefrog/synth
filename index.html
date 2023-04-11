@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+	<title>Vampi Synth demo</title>
+</head>
+<body>
+	<div class="fixed-bottom navbar-light bg-dark">
+		<div class="container">
+			<div class="row">
+				<div class="col-12 col-md-3 col-lg-2 pb-2 pt-2 order-md-3">
+					<div class="input-group">
+						<select onchange="setVoice(this.value)" class="form-control form-select-sm" id="voice">
+							<option value="simple" selected>Simple</option>
+							<option value="bass">Bass</option>
+							<option value="stabs">Stabs</option>
+						</select>
+						<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#exampleModal">⚙️</button>
+					</div>
+				</div>
+				<div class="col-12 col-md-9 col-lg-10 order-md-1">
+					<div class="keyboard-clip">
+						<div class="keyboard-wrap">
+							<div class="keyboard" id="keyboard"></div>
+						</div>
+						<div id="suspended">
+							Please press a key or click inside the browser window to enable sound.
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="container mt-4">
+		<div class="row">
+			<div class="col-md-4">
+				<h1>Vampi Synth demo</h1>
+			</div>
+			<div class="col-md-4">
+				<p>This is a demo meant to demonstrate WebAssembly in AudioWorklet.</p>
+			</div>
+			<div class="col-md-4">
+				<p>You can use your keyboard, mouse or MIDI keyboard to play.</p>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12">
+				<table>
+					<tr><td>CC 1</td><td>lfo_depth</td><td><input type="range" min="0" max="127" name="lfo_depth" id="lfo_depth" oninput="setCC(1, this.value)"></td></tr>
+					<tr><td>CC 7</td><td>volume</td><td><input type="range" min="0" max="127" name="volume" id="volume" oninput="setCC(7, this.value)"></td></tr>
+					<tr><td>CC 91</td><td>unison_spread</td><td><input type="range" min="0" max="127" name="unison_spread" id="unison_spread" oninput="setCC(91, this.value)"></td></tr>
+					<tr><td>CC 93</td><td>stereo_spread</td><td><input type="range" min="0" max="127" name="stereo_spread" id="stereo_spread" oninput="setCC(93, this.value)"></td></tr>
+					<tr><td>CC 74</td><td>cutoff_freq</td><td><input type="range" min="0" max="127" name="cutoff_freq" id="cutoff_freq" oninput="setCC(74, this.value)"></td></tr>
+					<tr><td>CC 71</td><td>resonance</td><td><input type="range" min="0" max="127" name="resonance" id="resonance" oninput="setCC(71, this.value)"></td></tr>
+				</table>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12">
+				<a target="_blank" href="https://git.vampi.tech/vampi/synth">Vampi Synth</a> &bull;
+				<a target="_blank" href="https://vampi.tech">Vampi Tech</a> &bull;
+				<a target="_blank" href="https://emscripten.org/">Emscripten</a> &bull;
+				<a target="_blank" href="https://webassembly.org/">WebAssembly</a>
+			</div>
+		</div>
+	</div>
+	<div class="modal fade" tabindex="-1" id="exampleModal">
+		<div class="modal-dialog  modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Midi devices</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<div id="midiDevices"></div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		const patches = {
+			bass: {
+				lfo_freq: 8,
+				osc_attack: 0,
+				osc_decay: 0,
+				osc_sustain: .4,
+				osc_release: 0,
+				filter_attack: 100,
+				filter_decay: 50000,
+				filter_sustain: 0,
+				filter_release: 100,
+				filter_eg_intensity: 1,
+				filter_kbd_track: .5,
+				pitch_bend_range: 12,
+				monophonic: 1,
+				unison_spread: .5,
+				stereo_spread: .5,
+				cutoff_freq: 0,
+				resonance: 0,
+			},
+			simple: {
+				lfo_freq: 6,
+				osc_attack: 10000,
+				osc_decay: 5000,
+				osc_sustain: .7,
+				osc_release: 5000,
+				filter_attack: 0,
+				filter_decay: 0,
+				filter_sustain: 0,
+				filter_release: 0,
+				filter_eg_intensity: 0,
+				filter_kbd_track: .5,
+				pitch_bend_range: 2,
+				monophonic: 0,
+				unison_spread: 0,
+				stereo_spread: 0,
+				cutoff_freq: 1,
+				resonance: 0,
+			},
+			stabs: {
+				lfo_freq: 6,
+				osc_attack: 0,
+				osc_decay: 0,
+				osc_sustain: 1,
+				osc_release: 0,
+				filter_attack: 100,
+				filter_decay: 40000,
+				filter_sustain: 0,
+				filter_release: 0,
+				filter_eg_intensity: 1,
+				filter_kbd_track: .5,
+				pitch_bend_range: 24,
+				monophonic: 0,
+				unison_spread: 0,
+				stereo_spread: 0,
+				cutoff_freq: 0,
+				resonance: 0,
+			},
+		};
+		let context = new AudioContext();
+		let prevState = null;
+		let checkState = () => {
+			if(prevState != context.state) {
+				if(context.state == 'suspended') {
+					document.getElementById('suspended').style.display = 'block';
+				} else if(context.state == 'running') {
+					document.getElementById('suspended').style.display = 'none';
+				}
+			}
+			prevState = context.state;
+			window.requestAnimationFrame(checkState);
+		};
+		checkState();
+
+		document.addEventListener('click', () => context.resume());
+
+		let workletNode;
+		context.audioWorklet.addModule('vampiSynthWorklet.js').then(() => {
+			workletNode = new AudioWorkletNode(context, 'vampi-synth', {
+				numberOfInputs: 0,
+				numberOfOutputs: 1,
+				outputChannelCount: [2]
+			});
+			workletNode.port.onmessage = e => {
+				if(e.data.initialized) {
+					setVoice(document.getElementById('voice').value);
+				}
+			};
+			workletNode.connect(context.destination);
+		});
+
+		function noteOn(note, velocity) {
+			workletNode&&workletNode.port.postMessage({ type: 'noteOn', note, velocity });
+		}
+		function noteOff(note, velocity) {
+			workletNode&&workletNode.port.postMessage({ type: 'noteOff', note, velocity });
+		}
+		function setCC(cc, val) {
+			workletNode&&workletNode.port.postMessage({ type: 'cc', param: cc, value: val });
+		}
+		function setVoice(name) {
+			workletNode&&workletNode.port.postMessage({ type: 'loadPatch', ...patches[name] });
+		}
+
+		navigator.permissions.query({ name: "midi", sysex: true }).then((result) => {
+			navigator.requestMIDIAccess().then(midiAccess => {
+				let devicesHtml = ''
+				for(const entry of midiAccess.inputs) {
+					devicesHtml += '<label><input type="checkbox" name="midiDevices[]" checked disabled value="'+entry[0]+'"> ' + entry[1].manufacturer + ' ' + entry[1].name + ' (' + entry[1].state + ')</label><br />';
+					const input = entry[1];
+					input.onmidimessage = ev => {
+						let channel = ev.data[0] & 0x0f;
+						if(channel != 0) return;
+						let cmd = ev.data[0] & 0xf0;
+						switch(cmd) {
+							case 0x90:
+								if(ev.data[2] > 0)
+									keyDown(ev.data[1], ev.data[2]);
+								else
+									keyUp(ev.data[1], ev.data[2]);
+								break;
+							case 0x80:
+								keyUp(ev.data[1], ev.data[2]);
+								break;
+							case 0xb0:
+								workletNode.port.postMessage({ type: 'cc', param: ev.data[1], value: ev.data[2] });
+								break;
+							case 0xe0:
+								workletNode.port.postMessage({ type: 'pitchBend', value: (ev.data[2] << 7) | ev.data[1] });
+								break;
+							default:
+								console.log('unhandled', cmd.toString(16), ev.data);
+						}
+					};
+				}
+				document.getElementById('midiDevices').innerHTML = devicesHtml;
+			}, msg => {
+				console.error('no midi access', msg)
+			});
+		}).catch(err => {
+			// console.error('Could not query MIDI', err);
+		});
+
+		const chars = [
+			{ key: 'z', note: 48, },
+			{ key: 's', note: 49, },
+			{ key: 'x', note: 50, },
+			{ key: 'd', note: 51, },
+			{ key: 'c', note: 52, },
+			{ key: 'v', note: 53, },
+			{ key: 'g', note: 54, },
+			{ key: 'b', note: 55, },
+			{ key: 'h', note: 56, },
+			{ key: 'n', note: 57, },
+			{ key: 'j', note: 58, },
+			{ key: 'm', note: 59, },
+			{ key: ',', note: 60, },
+			{ key: 'l', note: 61, },
+			{ key: '.', note: 62, },
+			{ key: ';', note: 63, },
+			{ key: '/', note: 64, },
+
+			{ key: 'q', note: 60, },
+			{ key: '2', note: 61, },
+			{ key: 'w', note: 62, },
+			{ key: '3', note: 63, },
+			{ key: 'e', note: 64, },
+			{ key: 'r', note: 65, },
+			{ key: '5', note: 66, },
+			{ key: 't', note: 67, },
+			{ key: '6', note: 68, },
+			{ key: 'y', note: 69, },
+			{ key: '7', note: 70, },
+			{ key: 'u', note: 71, },
+			{ key: 'i', note: 72, },
+			{ key: '9', note: 73, },
+			{ key: 'o', note: 74, },
+			{ key: '0', note: 75, },
+			{ key: 'p', note: 76, },
+			{ key: '[', note: 77, },
+			{ key: '=', note: 78, },
+			{ key: ']', note: 79, },
+		];
+		const charObj = Object.fromEntries(chars.map(c => [c.key, c.note]));
+		const reduced = chars.reduce((acc, val) => {
+			acc[val.note] = val.key;
+			return acc;
+		}, {});
+		const keyChars = Object.entries(reduced).sort((a, b) => a[0] - b[0]).map(c => c[1]);
+		function fillKeyboard() {
+			const firstKey = 0;
+			const lastKey = 127;
+			const numKeys = lastKey-firstKey;
+			const firstCharKey = 48;
+			let keyboard = document.getElementById('keyboard');
+			for(let i = firstKey; i <= lastKey; i++) {
+				let octave = Math.floor(i / 12);
+				var octaveKey = i % 12;
+				let black = octaveKey == 1 || octaveKey == 3 || octaveKey == 6 || octaveKey == 8 || octaveKey == 10;
+				let div = document.createElement('DIV');
+				div.classList.add('key', black ? 'black' : 'white');
+				div.note = i;
+				div.on = 0;
+				div.id = 'key'+i;
+				div.addEventListener('mousedown', kbd_mousedown);
+				div.addEventListener('mouseup', kbd_mouseup);
+				div.addEventListener('mouseleave', kbd_mouseleave);
+				div.addEventListener('mouseenter', kbd_mouseenter);
+				div.addEventListener('touchstart', kbd_touchstart);
+				div.addEventListener('touchend', kbd_touchend);
+				div.addEventListener('touchmove', kbd_touchmove);
+				div.addEventListener('touchcancel', kbd_touchcancel);
+				div.addEventListener('contextmenu', kbd_contextmenu);
+				if(i >= firstCharKey && i < firstCharKey + keyChars.length)
+					div.innerText = keyChars[i-firstCharKey].toUpperCase();
+				keyboard.appendChild(div);
+			}
+		}
+
+		let pressedKeys = {};
+		document.addEventListener('keydown', ev => {
+			if(!(ev.key in charObj)) return;
+			if(ev.ctrlKey || ev.altKey || ev.shiftKey) return;
+			ev.stopPropagation();
+			ev.preventDefault();
+			if(pressedKeys[ev.key]) return;
+			pressedKeys[ev.key] = true;
+			keyDown(charObj[ev.key], 100);
+		});
+
+		document.addEventListener('keyup', ev => {
+			if(!(ev.key.toLowerCase() in charObj)) return;
+			ev.stopPropagation();
+			ev.preventDefault();
+			delete pressedKeys[ev.key.toLowerCase()];
+			keyUp(charObj[ev.key.toLowerCase()], 100);
+		});
+
+		function keyDown(note, velocity) {
+			const key = document.getElementById('key'+note);
+			if(key.on < 1) {
+				key.classList.add('active');
+				noteOn(note, velocity);
+			}
+			key.on++;
+		}
+
+		function keyUp(note, velocity) {
+			const key = document.getElementById('key'+note);
+			key.on--;
+			if(key.on > 0) return;
+			key.classList.remove('active');
+			noteOff(note, velocity);
+		}
+
+		function kbd_mousedown(event) {
+			if(event.which != 1) return;
+			event.preventDefault();
+			event.stopPropagation();
+			keyDown(event.target.note, 100);
+		}
+
+		function kbd_mouseup(event) {
+			if(event.which != 1) return;
+			event.preventDefault();
+			event.stopPropagation();
+			keyUp(event.target.note, 100);
+		}
+
+		function kbd_mouseenter(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			if(event.buttons & 1)
+				keyDown(event.target.note, 100);
+		}
+
+		function kbd_mouseleave(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			if(event.buttons & 1)
+				keyUp(event.target.note, 100);
+		}
+
+		function kbd_touchstart(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			keyDown(event.target.note, 100);
+		}
+
+		function kbd_touchend(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			keyUp(event.target.note, 100);
+		}
+
+		function kbd_touchmove(event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		function kbd_touchcancel(event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		function kbd_contextmenu(event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		fillKeyboard();
+	</script>
+	<style type="text/css">
+		.keyboard-clip {
+			display: flex;
+			justify-content: center;
+			overflow: hidden;
+			position: relative;
+		}
+
+		#suspended {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			top: 0;
+			line-height: 50px;
+			background: rgba(0, 0, 0, .7);
+			z-index: 10;
+			text-align: center;
+			color: white;
+		}
+
+		.keyboard-wrap {
+			white-space: nowrap;
+			flex-shrink: 0;
+		}
+
+		.keyboard {
+			display: table-row;
+			user-select: none;
+			-webkit-user-select: none;
+			-moz-user-select: none;
+			-o-user-select: none;
+			text-overflow: clip;
+			white-space: nowrap;
+			font-size: 14px;
+		}
+
+		.key {
+			display: inline-block;
+			height: 50px;
+			border: 1px solid rgba(32,32,32,0.2);
+			border-radius: 0px 0px 5px 5px;
+			cursor: pointer;
+			box-shadow: 0px 5px 1px rgba(32,32,32,0.2);
+			-webkit-transition: margin 0.05s ease, background-color 0.05s ease, box-shadow 0.05s ease;
+			position: relative;
+			overflow: hidden;
+			padding-top: 28px;
+			text-align: center;
+		}
+
+		.key:hover {
+			background-color: #ffc107;
+		}
+		.key.active {
+			background-color: #0d6efd;
+		}
+
+		.white {
+			background-color: #ffffff;
+			color: rgb(32,32,32);
+			z-index: 0;
+			text-shadow: 0px 1px 1px rgba(32,32,32,0.5);
+			width: 24px;
+			z-index: 1;
+		}
+
+		.black {
+			margin-bottom: 20px;
+			background-color: rgb(32,32,32);
+			color: #ffffff;
+			z-index: 1;
+			text-shadow: 0px -1px 1px rgba(255,255,255,0.5);
+			width: 16px;
+			height: 30px;
+			margin-left: -10px;
+			margin-right: -6px;
+			z-index: 2;
+			padding-top: 8px;
+		}
+	</style>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+</body>
+</html>
