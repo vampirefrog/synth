@@ -1,6 +1,8 @@
+#ifndef __EMSCRIPTEN__
 #include <stdio.h>
-#include <string.h>
+#endif
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 #include "synth.h"
@@ -22,6 +24,18 @@ void synth_init(struct Synth *synth) {
 		voice_init(&synth->voices[i], synth);
 	}
 }
+
+#ifndef __EMSCRIPTEN__
+struct Synth *synth_new() {
+	struct Synth *s = malloc(sizeof(struct Synth));
+	synth_init(s);
+	return s;
+}
+
+void synth_free(struct Synth *synth) {
+	return free(synth);
+}
+#endif
 
 static float detune(float freq, float semitones) {
 	return freq * pow(2, semitones / 12.0);
@@ -48,9 +62,6 @@ static void synth_spread_unison(struct Synth *synth) {
 	for(int i = 4; i < 7; i++) {
 		synth->voices[i].detune = (i - 7) * synth->unison_spread / 6.0;
 	}
-	// for(int i = 0; i < 7; i++) {
-	// 	printf("voice %d detune %f\n", i, synth->voices[i].detune);
-	// }
 }
 
 static void synth_spread_stereo(struct Synth *synth) {
@@ -180,6 +191,12 @@ void synth_render_sample(struct Synth *synth, float *out) {
 	synth->time++;
 }
 
+void synth_render_buffer(struct Synth *synth, float *out, int num_samples) {
+	for(int i = 0; i < num_samples; i++, out += 2) {
+		synth_render_sample(synth, out);
+	}
+}
+
 void synth_set_cutoff_freq(struct Synth *synth, float f) {
 	synth->cutoff = f;
 }
@@ -267,6 +284,7 @@ void synth_set_monophonic(struct Synth *s, int value) {
 	s->monophonic = value;
 }
 
+#ifndef __EMSCRIPTEN__
 void synth_load_patch(struct Synth *s, const char *filename) {
 	FILE *f = fopen(filename, "r");
 	if(!f) {
@@ -320,3 +338,4 @@ void synth_load_patch(struct Synth *s, const char *filename) {
 	}
 	fclose(f);
 }
+#endif

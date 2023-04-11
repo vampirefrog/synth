@@ -39,10 +39,15 @@ struct Synth {
 };
 
 void synth_init(struct Synth *synth);
+#ifndef __EMSCRIPTEN__
+struct Synth *synth_new(void);
+void synth_free(struct Synth *synth);
 void synth_load_patch(struct Synth *synth, const char *filename);
+#endif
 void synth_note_on(struct Synth *synth, uint8_t note, float velocity);
 void synth_note_off(struct Synth *synth, uint8_t note, float velocity);
 void synth_render_sample(struct Synth *synth, float *out);
+void synth_render_buffer(struct Synth *synth, float *out, int num_samples);
 void synth_set_unison_spread(struct Synth *s, float spread);
 void synth_set_stereo_spread(struct Synth *s, float spread);
 void synth_set_cutoff_freq(struct Synth *s, float freq);
