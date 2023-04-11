@@ -97,6 +97,8 @@ float envelope_sample(struct Envelope *env) {
 				env->state = EnvNone;
 			}
 			break;
+		default:
+			break;
 	}
 
 	return env->output;
