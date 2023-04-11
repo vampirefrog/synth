@@ -2,3 +2,5 @@
 *.o
 vampisynth
 *.sublime-workspace
+*.js
+*.wasm
