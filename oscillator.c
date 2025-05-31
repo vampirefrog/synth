@@ -2,21 +2,24 @@
 #include "config.h"
 
 int16_t oscillator_render_sample(struct Oscillator *osc) {
-	if(osc->period == 0) return 0;
+	if(osc->period == 0.0f) return 0;
 
-	osc->phase += 0x10000; // add one sample in fixed
-	osc->sub_phase += 0x10000;
+	// Advance phase by 1 sample
+	osc->phase += 1.0f;
+	osc->sub_phase += 1.0f;
 
-	fixed sub_period = osc->period << 1;
+	float sub_period = osc->period * 2.0f;
 
 	while(osc->phase > osc->period)
 		osc->phase -= osc->period;
 	while(osc->sub_phase > sub_period)
 		osc->sub_phase -= sub_period;
 
-	return (1 << 13) - (osc->phase << 3) / (osc->period >> 11) + (osc->sub_phase - osc->period / 2 > osc->period ? 4096 : -4096);
+	// Example output: simple saw + sub oscillator
+	return (int16_t)((1 << 13) - (osc->phase * 8.0f) / (osc->period / 2048.0f) + ((osc->sub_phase - osc->period / 2.0f > osc->period) ? 4096 : -4096));
 }
 
 void oscillator_set_freq(struct Oscillator *osc, float freq) {
-	osc->period = ((float)SAMPLE_RATE / freq) * 65536.0;
+	osc->freq = freq;
+	osc->period = (float)SAMPLE_RATE / freq;
 }

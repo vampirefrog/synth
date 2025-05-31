@@ -2,7 +2,6 @@
 #define SYNTH_H_
 
 #include <stdint.h>
-typedef uint32_t fixed;
 
 #define SYNTH_NUM_VOICES 16
 #define TUNING 440

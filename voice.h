@@ -1,7 +1,7 @@
 #ifndef VOICE_H_
 #define VOICE_H_
 
-#include "types.h"
+#include <stdint.h>
 #include "envelope.h"
 #include "oscillator.h"
 #include "filter.h"
